@@ -683,6 +683,7 @@ async function showTerm(ev, name, qn){ // qn = item key or null
   showTermData(ev, t, key, src, qn);
 }
 function showTermData(ev, t, key, src, qn){
+  if (ev && ev.stopPropagation) ev.stopPropagation();
   closePop();
   const s = S.sess; let masked = null;
   if (qn && s && !s.checked[qn]) { const r = resolve(qn); if (r && r.q) masked = blanksOf(r.q.text); }
@@ -693,10 +694,11 @@ function showTermData(ev, t, key, src, qn){
     <dl><dt>정의</dt><dd>${mask(esc(t.def),masked)}</dd>${t.bg?`<dt>등장 배경</dt><dd>${mask(esc(t.bg),masked)}</dd>`:''}${t.body&&t.body.length?`<dt>핵심 내용</dt><dd><ul>${t.body.map(b=>`<li>${mask(esc(b),masked)}</li>`).join('')}</ul></dd>`:''}${t.sig?`<dt>의의</dt><dd>${mask(esc(t.sig),masked)}</dd>`:''}${t.fx?`<dt>파생 효과·영향</dt><dd>${mask(esc(t.fx),masked)}</dd>`:''}</dl>
     ${imgs.map(im=>`<span onclick="lightboxIm(this.firstChild)">${imgTag(im, im.ch||src.no, true)}</span><div class="small muted">${esc(im.cap)}</div>`).join('')}
     ${rel.length?`<dt style="font-weight:700;color:var(--green-d);margin-top:8px;font-size:12px">관련 키워드</dt><div class="kwchips">${rel.map(r=>`<button onclick="relTerm(event,'${esc(r).replace(/'/g,"\\'")}',${qn?`'${qn}'`:'null'})">${esc(r)}</button>`).join('')}</div>`:''}`;
-  // position: below the clicked element inside .app
-  const app = $('#app'); const r = ev.currentTarget ? ev.currentTarget.getBoundingClientRect() : {left:ev.clientX, bottom:ev.clientY, top:ev.clientY, width:0};
-  const ar = app.getBoundingClientRect();
-  app.appendChild(pop); popEl = pop;
+  // position: below the clicked element; inside an open sheet/overlay the popover goes into the overlay so it stays on top
+  const host = ovEl || $('#app'); const r = ev.currentTarget ? ev.currentTarget.getBoundingClientRect() : {left:ev.clientX, bottom:ev.clientY, top:ev.clientY, width:0};
+  const ar = ovEl ? {left:0, top:0, width:window.innerWidth} : host.getBoundingClientRect();
+  host.appendChild(pop); popEl = pop;
+  if (ovEl) { pop.style.position = 'fixed'; pop.style.zIndex = '45'; pop.style.maxHeight = '55vh'; const sh = ovEl.querySelector('.sheet, .center-box'); if (sh && !sh._popScroll) { sh._popScroll = true; sh.addEventListener('scroll', () => closePop(), {passive:true}); } }
   const pw = pop.offsetWidth; let left = r.left - ar.left + r.width/2 - 40; left = Math.max(12, Math.min(left, ar.width - pw - 12));
   const top = r.bottom - ar.top + 10;
   pop.style.left = left+'px'; pop.style.top = top+'px'; pop.style.setProperty('--ax', Math.max(16, Math.min(r.left - ar.left + r.width/2 - left - 7, pw-30))+'px');
@@ -709,8 +711,8 @@ window.addEventListener('scroll', () => { if (popEl) { const r=popEl.getBounding
 
 /* ---------- OVERLAYS ---------- */
 let ovEl = null;
-function overlay(html, kind, after){ closeOv(); const ov=document.createElement('div'); ov.className='ov'+(kind==='center'?' c':''); ov.innerHTML = `<div class="${kind==='center'?'center-box':'sheet'}">${html}</div>`; ov.addEventListener('click', e=>{ if (e.target===ov) closeOv(); }); document.body.appendChild(ov); ovEl=ov; if (after) after(ov); }
-function closeOv(){ if (ovEl) { ovEl.remove(); ovEl=null; } }
+function overlay(html, kind, after){ closeOv(); const ov=document.createElement('div'); ov.className='ov'+(kind==='center'?' c':''); ov.innerHTML = `<div class="${kind==='center'?'center-box':'sheet'}">${html}</div>`; ov.addEventListener('click', e=>{ if (e.target===ov) closeOv(); else if (popEl && !popEl.contains(e.target) && !e.target.closest('.kw') && !e.target.closest('.kwchips') && !e.target.closest('.dict .it')) closePop(); }); document.body.appendChild(ov); ovEl=ov; if (after) after(ov); }
+function closeOv(){ closePop(); if (ovEl) { ovEl.remove(); ovEl=null; } }
 function showConfirm(msg, fn){ overlay(`<div style="font-size:14px;line-height:1.7;margin-bottom:14px">${esc(msg)}</div><div style="display:flex;gap:8px"><button class="pill-btn ghost" onclick="closeOv()">취소</button><button class="pill-btn" id="okbtn">확인</button></div>`,'center'); $('#okbtn').onclick = ()=>{ closeOv(); fn(); }; }
 function lightbox(no, key){ const im = S.ch[no]?.images[key]; if (!im) return; if (im.sp) spriteUrl(no, im).then(u => lightboxSrc(u, im.cap, im.credit, im.src)); else lightboxSrc('img/'+im.file, im.cap, im.credit, im.src); }
 function lightboxIm(img){ if (!img) return; const cap = img.alt, cr = img.dataset.credit||'', src = img.dataset.src||''; if (img.src) lightboxSrc(img.src, cap, cr, src); }
