@@ -204,6 +204,28 @@ body.study-on .nav{display:none}
 .verdict.ok{background:var(--blue-s);color:var(--blue)}.verdict.no{background:var(--red-s);color:var(--red)}
 .verdict .v{font-weight:900;font-size:16px}.verdict .w{font-weight:900;font-size:30px;line-height:1.3;margin:4px 0;letter-spacing:.05em;word-break:keep-all}
 .verdict .small{opacity:.85}
+/* home hero + daily */
+.hero{background:var(--green);color:#fff;border-radius:16px;padding:16px;display:flex;gap:14px;align-items:center;margin-top:12px}
+.hero .ring{width:84px;height:84px;flex:none;position:relative}
+.hero .ring svg{width:84px;height:84px}
+.hero .ring .pc{position:absolute;inset:0;display:grid;place-items:center;font-weight:900;font-size:17px}
+.hero .st{flex:1;min-width:0;font-size:12px;line-height:1.7}
+.hero .st b{font-size:15px}
+.mainbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 4px}
+.mainbtns .mb{border-radius:14px;padding:14px 12px;text-align:left;background:var(--soft);display:flex;flex-direction:column;gap:2px;min-height:78px}
+.mainbtns .mb .t{font-weight:800;font-size:15px}.mainbtns .mb .d{font-size:11px;opacity:.8}
+.mainbtns .mb.primary{background:var(--green);color:#fff;grid-column:1/-1;flex-direction:row;align-items:center;justify-content:space-between;min-height:0}
+.mainbtns .mb.primary .t{font-size:17px}
+.mainbtns .mb.o{background:var(--orange-s);color:#8a5a00}
+.kw.lock{color:var(--muted);border-bottom-color:var(--line);background:none;cursor:default}
+.ex .qtop{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.ex .qtop .sp{flex:1}
+.ex .qnum{font-weight:900;font-size:15px}
+.expl{background:var(--blue-s);border-radius:10px;padding:10px 12px;font-size:13px;margin:8px 0}
+.expl h5{margin:0 0 4px;font-size:12px;color:var(--blue)}
+.optx{font-size:12px;color:var(--muted);padding:2px 0 6px 38px;line-height:1.5}
+.optx.right{color:var(--blue)}
+.daily-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0;box-shadow:var(--shadow)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -212,13 +234,18 @@ body.study-on .nav{display:none}
   <section class="screen on" id="s-home">
     <div class="hdr"><h1>별별 한국사</h1><button class="ic" title="학습 알림" onclick="go('mine')">🔔</button></div>
     <div class="content">
-      <div class="bigcard">
-        <div class="live" id="home-live"></div>
-        <div class="orangecard" id="home-orange"></div>
-      </div>
+      <div id="home-top"></div>
+      <div class="sect" style="margin-top:18px">단원별 학습</div>
       <div class="eras" id="eras"></div>
       <div class="chlist" id="chlist"></div>
     </div>
+  </section>
+
+  <!-- DAILY (오늘의 문제) -->
+  <section class="screen" id="s-daily">
+    <div class="hdr"><button class="ic" onclick="go('home')">←</button><span class="b">오늘의 문제</span><span class="small muted" id="daily-left"></span></div>
+    <div class="content" id="daily-body" style="padding-bottom:20px"></div>
+    <div class="sticky-bottom" id="daily-foot"></div>
   </section>
 
   <!-- CHAPTER -->
@@ -323,7 +350,9 @@ function go(name){
 function chInfo(no){ return S.index.chapters.find(c => c.no === no); }
 function chSessions(no){ return sessions.filter(s => s.ch === no); }
 function bestPct(no){ const d = chSessions(no).filter(s => s.status==='done' && s.mode!=='exam'); if (!d.length) return null; return Math.max(...d.map(s => Math.round(100*s.correct/s.total))); }
-function learnedCount(no){ let c=0; for (const k in PROG) if (parseKey(k).ch===no) c++; return c; }
+function learnedCount(no){ let c=0; for (const k in PROG) { const p=parseKey(k); if (!p.exam && p.ch===no) c++; } return c; }
+function examSeen(){ let c=0; for (const k in PROG) if (parseKey(k).exam) c++; return c; }
+function byulSeen(){ let c=0; for (const k in PROG) if (!parseKey(k).exam) c++; return c; }
 function dueCount(no){ return dueKeys(no).length; }
 
 /* ---------- HOME ---------- */
@@ -331,12 +360,21 @@ async function renderHome(){
   await loadIndex();
   const open = sessions.find(s => s.status === 'progress');
   const done = sessions.filter(s => s.status === 'done');
-  const totalQ = done.reduce((a,s)=>a+s.total,0), totalC = done.reduce((a,s)=>a+s.correct,0);
-  $('#home-live').innerHTML = open
-    ? `<div><div class="ttl">채점 대기 중입니다.</div><div class="small" style="opacity:.9">${pad(open.ch)}강 ${esc(chInfo(open.ch).title)}</div></div><div class="mini"><span><b>교재</b>${open.mode==='exam'?'기출':'별채우기'}</span><span><b>학습</b>${Object.keys(open.answers||{}).length}/${open.total}문항</span></div><button class="pill-btn" style="background:#fff;color:var(--green-d);padding:8px" onclick="resumeSession('${open.id}')">이어서 풀기</button>`
-    : `<div><div class="ttl">오늘도 별 채우러 가볼까요?</div><div class="small" style="opacity:.9">오늘 복습 ${dueKeys(null).length}문항 대기 · 학습 ${Object.keys(PROG).length}/1,057</div></div><div class="mini"><span><b>누적</b>${totalQ}문항</span><span><b>정답률</b>${totalQ?Math.round(100*totalC/totalQ):0}%</span></div><button class="pill-btn" style="background:#fff;color:var(--green-d);padding:8px" onclick="quickStart()">빠른 학습 시작</button>`;
-  const wrongN = wrongPool().length;
-  $('#home-orange').innerHTML = `<div><div class="ttl" style="font-weight:700;font-size:15px">오답노트</div><div class="small" style="opacity:.95">다시 풀 문항 ${wrongN}개</div></div><div class="mini"><span><b>기출</b>${S.index.chapters.reduce((a,c)=>a+c.ne,0)}문항 수록</span></div><button class="pill-btn" style="background:#fff;color:#c77c00;padding:8px" onclick="go('mine');mineTab('wrong')">오답 확인</button>`;
+  const totalE = S.index.chapters.reduce((a,c)=>a+c.ne,0);
+  const bs = byulSeen(), es = examSeen(), pct = Math.round(100*(bs+es)/(1057+totalE));
+  const todayK = dayKey(Date.now()); const todayN = done.filter(s=>dayKey(s.start)===todayK).reduce((a,s)=>a+s.correct+s.wrong,0);
+  const days = new Set(done.map(s=>dayKey(s.start))); let streak=0; for (let i=0;i<365;i++){ const d=new Date(); d.setDate(d.getDate()-i); if (days.has(dayKey(d))) streak++; else if (i>0) break; }
+  const due = dueKeys(null).length, wrongN = wrongPool().length;
+  const r=36, circ=2*Math.PI*r;
+  $('#home-top').innerHTML = `<div class="hero"><div class="ring"><svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="${r}" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-dasharray="${circ*pct/100} ${circ}" transform="rotate(-90 42 42)"/></svg><div class="pc">${pct}%</div></div>
+    <div class="st">별채우기 <b class="num">${bs}</b>/1,057 · 기출 <b class="num">${es}</b>/${totalE}<br>오늘 <b class="num">${todayN}</b>문항 · 연속 <b class="num">${streak}</b>일<br>복습 대기 <b class="num">${due}</b> · 오답 <b class="num">${wrongN}</b></div></div>
+    <div class="mainbtns">
+      <button class="mb primary" onclick="startDaily()"><span><span class="t">학습하기</span><br><span class="d">실제 기출 2문제씩 · 랜덤 + 복습</span></span><span style="font-size:26px">▶</span></button>
+      <button class="mb o" onclick="startSession({mode:'review'})"><span class="t">복습하기</span><span class="d">복습 예정 ${due}문항 (별채우기+기출)</span></button>
+      <button class="mb" onclick="quickStart()"><span class="t">${open?'이어서 풀기':'별채우기'}</span><span class="d">${open?pad(open.ch)+'강 채점 대기 중':'새 문항 + 복습 섞어서'}</span></button>
+      <button class="mb" onclick="go('mine');mineTab('wrong')"><span class="t">오답노트</span><span class="d">다시 풀 문항 ${wrongN}개</span></button>
+      <button class="mb" onclick="go('more')"><span class="t">용어 사전 · 필기</span><span class="d">2,093개 · 70쪽</span></button>
+    </div>`;
   const eras = ['전체', ...S.index.eras];
   $('#eras').innerHTML = eras.map(e => `<button class="${S.era===e?'on':''}" onclick="S.era='${e}';renderHome()">${e}</button>`).join('');
   $('#chlist').innerHTML = S.index.chapters.filter(c => S.era==='전체' || c.era===S.era).map(c => {
@@ -372,9 +410,9 @@ async function openChapter(no){
 }
 function sessRow(s){
   const on = s.status==='progress';
-  return `<div class="it" onclick="${on?`resumeSession('${s.id}')`:`openResult('${s.id}')`}"><div class="tm">${fmtTime(s.start)}</div><div class="box ${on?'on':''}"><div class="n">${pad(s.ch)}. ${esc(chInfo(s.ch).title)} · ${modeName(s.mode)}</div>${on?`<div class="small">현재 채점 대기 중</div>`:`<div class="row small" style="margin-top:4px"><span class="chip b">정답</span>${s.correct}문항 <span class="chip o">오답</span>${s.wrong}문항</div>`}</div><div class="badge ${on?'prog':'done'}">${on?'채점중':'채점<br>완료'}</div></div>`;
+  return `<div class="it" onclick="${on?`resumeSession('${s.id}')`:`openResult('${s.id}')`}"><div class="tm">${fmtTime(s.start)}</div><div class="box ${on?'on':''}"><div class="n">${s.ch?pad(s.ch)+'. '+esc(chInfo(s.ch).title)+' · ':''}${modeName(s.mode)}</div>${on?`<div class="small">현재 채점 대기 중</div>`:`<div class="row small" style="margin-top:4px"><span class="chip b">정답</span>${s.correct}문항 <span class="chip o">오답</span>${s.wrong}문항</div>`}</div><div class="badge ${on?'prog':'done'}">${on?'채점중':'채점<br>완료'}</div></div>`;
 }
-const modeName = m => ({byul:'별채우기', study:'학습(새 문항+복습)', exam:'기출', retry:'오답 다시 풀기'})[m] || m;
+const modeName = m => ({byul:'별채우기', study:'학습(새 문항+복습)', exam:'기출', retry:'오답 다시 풀기', review:'복습', daily:'오늘의 문제'})[m] || m;
 
 /* ---------- SESSIONS (말해보카식 간격 반복) ---------- */
 const LV = [10*60e3, 864e5, 3*864e5, 7*864e5, 14*864e5, 30*864e5, 60*864e5, 120*864e5];
@@ -394,6 +432,7 @@ async function startSession(opts){
   let keys = [], ch = o.ch || null;
   if (mode === 'exam') { const d = await loadCh(ch); keys = d.exam.map(e => e.id); }
   else if (mode === 'retry') { keys = o.keys; }
+  else if (mode === 'review') { keys = dueKeys(null).slice(0, 20); if (!keys.length) { toast('지금 복습할 문항이 없습니다. 학습을 먼저 해 보세요.'); return; } ch = parseKey(keys[0]).ch; }
   else {
     const chs = ch ? [ch] : S.index.chapters.map(c=>c.no); for (const c of chs) await loadCh(c);
     const due = dueKeys(ch).slice(0, 40); let nk = newKeys(ch, o.newN || NEW_PER());
@@ -414,12 +453,16 @@ function recordResult(key, ok){
   const s = S.sess, now = Date.now(); s.attempts[key] = (s.attempts[key]||0) + 1;
   if (!(key in s.results)) { s.results[key] = ok; } // 첫 시도만 세션 성적에 반영
   s.checked[key] = true; recount(s);
-  const p = PROG[key] || { lv:0, seen:0, ok:0, ng:0, due:0, last:0 };
-  const wasNew = !PROG[key]; p.seen++; if (ok) { p.ok++; p.lv = Math.min(LV.length-1, (wasNew ? 1 : p.lv + 1)); } else { p.ng++; p.lv = 0; }
-  p.lastOk = ok; p.last = now; p.due = now + LV[p.lv]; p.prev = PROG[key] ? PROG[key].last : 0; PROG[key] = p; saveProg();
+  srsUpdate(key, ok);
   s.queue.shift(); if (!ok) s.queue.splice(Math.min(3, s.queue.length), 0, key);
   persist(s);
 }
+function srsUpdate(key, ok){
+  const now = Date.now(); const p = PROG[key] || { lv:0, seen:0, ok:0, ng:0, due:0, last:0 };
+  const wasNew = !PROG[key]; p.seen++; if (ok) { p.ok++; p.lv = Math.min(LV.length-1, (wasNew ? 1 : p.lv + 1)); } else { p.ng++; p.lv = 0; }
+  p.lastOk = ok; p.last = now; p.due = now + LV[p.lv]; p.prev = PROG[key] ? PROG[key].last : 0; PROG[key] = p; saveProg();
+}
+function srsTag(key){ const p = PROG[key]; const just = S.sess && S.sess.checked && S.sess.checked[key]; if (!p || !p.seen || (just && p.seen===1)) return `<span class="chip lb">NEW</span>`; const gap = just ? (p.last - (p.prev||p.last)) : (Date.now()-p.last); return `<span class="chip lg">${humanGap(gap)} 만에 복습</span>`; }
 
 /* keyword highlighting */
 function kwRegex(d, kws){
@@ -428,10 +471,10 @@ function kwRegex(d, kws){
   if (!uniq.length) return null;
   return new RegExp(uniq.map(n => n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'g');
 }
-function highlight(text, d, kws, key){
+function highlight(text, d, kws, key, locked){
   const re = kwRegex(d, kws); if (!re) return esc(text);
   let out='', last=0, m;
-  while ((m = re.exec(text))) { out += esc(text.slice(last, m.index)); out += `<span class="kw" onclick="showTerm(event,'${esc(m[0]).replace(/'/g,"\\'")}',${key?`'${key}'`:'null'})">${esc(m[0])}</span>`; last = m.index + m[0].length; }
+  while ((m = re.exec(text))) { out += esc(text.slice(last, m.index)); out += locked ? `<span class="kw lock" onclick="event.stopPropagation();toast('문제를 풀고 나면 키워드를 볼 수 있어요')">${esc(m[0])}</span>` : `<span class="kw" onclick="showTerm(event,'${esc(m[0]).replace(/'/g,"\\'")}',${key?`'${key}'`:'null'})">${esc(m[0])}</span>`; last = m.index + m[0].length; }
   return out + esc(text.slice(last));
 }
 function blanksOf(text){ const out=[]; text.replace(/\{\{(.+?)\}\}/g, (m,a)=>{ out.push(a); return m; }); return out; }
@@ -503,23 +546,63 @@ function submitBlank(){
   recordResult(key, ok); renderStudy();
 }
 function giveUp(){ const s=S.sess, key=s.cur; s.answers[key] = blanksOf(resolve(key).q.text).map(()=>''); recordResult(key, false); renderStudy(); }
-function afterItem(){ const s=S.sess; closePop(); if (s.mode==='exam') { s.queue.shift(); persist(s); } nextItem(); }
+function afterItem(){ closePop(); nextItem(); }
 function toggleInfo(k){ const el = document.getElementById('info-'+k); if (!el) return; el.hidden = !el.hidden; if (!el.hidden && S.sess && !S.sess.checked[k]) toast('정답 부분은 제출 후 공개됩니다'); }
 function recount(s){ const r = Object.values(s.results); s.correct = r.filter(Boolean).length; s.wrong = r.length - s.correct; }
 function doFinish(){ const s=S.sess; s.status='done'; s.end=Date.now(); s.total = Object.keys(s.results).length || s.total; recount(s); persist(s); document.body.classList.remove('study-on'); backTo='mine'; openResult(s.id); }
 /* exam */
-function examCard(e, d, s){
-  const checked = s.checked[e.id], sel = s.answers[e.id];
-  const mat = e.material ? `<div class="mat">${highlight(e.material, d, e.kw)}</div>` : '';
+function examCard(e, d, s, num){
+  const checked = s.checked[e.id], sel = s.answers[e.id]; const L = !checked;
+  const mat = e.material ? `<div class="mat">${highlight(e.material, d, e.kw, null, L)}</div>` : '';
   const imgs = (e.img||[]).map(k=>d.images[k]).filter(Boolean);
-  return `<div class="q ex" id="q-${e.id}"><div class="src"><span class="tag">기출</span>${esc(e.src)}</div><div class="stem">${highlight(e.stem, d, e.kw)}</div>${mat}${imgs.length?`<div class="gal">${imgs.map((im,i)=>figure(im,e.img[i],d.no)).join('')}</div>`:''}
-    <div>${e.options.map((o,i)=>{ const n=i+1; let cls=''; if (checked){ if (n===e.answer) cls='right'; else if (n===sel) cls='wrong'; } else if (n===sel) cls='sel'; return `<div class="opt ${cls}" onclick="${checked?'':`pick('${e.id}',${n})`}"><span class="c">${'①②③④⑤'[i]}</span><span>${highlight(o, d, e.kw)}</span></div>`; }).join('')}</div>
-    <div class="acts">${checked?`<span class="chip ${s.results[e.id]?'lb':'lo'}">${s.results[e.id]?'정답':'오답'}</span>`:`<button class="btn-sm on" onclick="checkEx('${e.id}')">확인</button>`}<span class="sp"></span><button class="btn-sm" onclick="toggleInfo('${e.id}')">해설·정보 ${checked?'':'🔒'}</button></div>
-    <div id="info-${e.id}" hidden><div class="info">${checked?`<h4>정답 ${'①②③④⑤'[e.answer-1]}</h4><div>${esc(e.expl)}</div>${e.optx&&e.optx.length?`<h4 style="margin-top:8px">선지 해설</h4><ul>${e.optx.map((x,i)=>`<li><b>${'①②③④⑤'[i]}</b> ${esc(x)}</li>`).join('')}</ul>`:''}`:`<div class="muted">확인 후 해설이 공개됩니다.</div>`}<h4 style="margin-top:10px">키워드</h4><div class="kwchips">${e.kw.map(k=>`<button onclick="showTerm(event,'${esc(k).replace(/'/g,"\\'")}',null)">${esc(k)}</button>`).join('')}</div></div></div></div>`;
+  return `<div class="q ex" id="q-${e.id}"><div class="qtop"><span class="qnum">${num?num+'.':''}</span><span class="src"><span class="tag">기출</span>${esc(e.src)}</span><span class="sp"></span>${srsTag(e.id)}</div>
+    <div class="stem">${highlight(e.stem, d, e.kw, null, L)}</div>${mat}${imgs.length?`<div class="gal">${imgs.map((im,i)=>figure(im,e.img[i],d.no)).join('')}</div>`:''}
+    ${checked?`<div class="expl"><h5>자료 해설</h5>${esc(e.expl)}</div>`:''}
+    <div>${e.options.map((o,i)=>{ const n=i+1; let cls=''; if (checked){ if (n===e.answer) cls='right'; else if (n===sel) cls='wrong'; } else if (n===sel) cls='sel'; return `<div class="opt ${cls}" onclick="${checked?'':`pick('${e.id}',${n})`}"><span class="c">${'①②③④⑤'[i]}</span><span>${highlight(o, d, e.kw, null, L)}</span></div>${checked&&e.optx&&e.optx[i]?`<div class="optx ${n===e.answer?'right':''}">${esc(e.optx[i])}</div>`:''}`; }).join('')}</div>
+    <div class="acts">${checked?`<span class="chip ${s.results[e.id]?'lb':'lo'}">${s.results[e.id]?'정답':'오답'}</span>`:`<button class="btn-sm on" onclick="checkEx('${e.id}')">확인</button>`}<span class="sp"></span><button class="btn-sm" onclick="openChapter(${d.no})">학습하기 · ${pad(d.no)}강</button><button class="btn-sm" onclick="toggleInfo('${e.id}')">정보 ${checked?'':'🔒'}</button></div>
+    <div id="info-${e.id}" hidden>${checked?exInfoHtml(e, d):`<div class="info"><div class="muted">문제를 풀면 해설·관련 정보가 열립니다.</div></div>`}</div></div>`;
 }
-function pick(id,n){ const s=S.sess; s.answers[id]=n; persist(s); const d=resolve(id).d; $('#q-'+id).outerHTML = examCard(d.exam.find(e=>e.id===id), d, s); }
-function checkEx(id){ const s=S.sess, d=resolve(id).d, e=d.exam.find(x=>x.id===id); if (!s.answers[id]) { toast('보기를 먼저 고르세요'); return; } s.checked[id]=true; s.results[id]=(s.answers[id]===e.answer); recount(s); persist(s); const el=$('#q-'+id); if (el) el.outerHTML = examCard(e,d,s); if (S.screen==='study') $('#st-foot').innerHTML = `<button class="pill-btn" style="flex:1" onclick="afterItem()">다음 →</button>`; }
+function exInfoHtml(e, d){
+  const terms = e.kw.map(k => d.alias[k]||k).filter(k => d.g[k]); const imgs = []; const seen = new Set();
+  terms.forEach(t => (d.g[t].img||[]).forEach(k => { if (!seen.has(k) && d.images[k]) { seen.add(k); imgs.push(k); } }));
+  return `<div class="info"><h4>정답 ${'①②③④⑤'[e.answer-1]}</h4><div>${esc(e.expl)}</div>
+    <h4 style="margin-top:10px">키워드 (누르면 말풍선)</h4><div class="kwchips">${e.kw.map(k=>`<button onclick="showTerm(event,'${esc(k).replace(/'/g,"\\'")}',null)">${esc(k)}</button>`).join('')}</div>
+    ${terms.length?`<h4 style="margin-top:10px">핵심 정리</h4><ul>${terms.slice(0,4).map(t=>`<li><b>${esc(t)}</b> — ${esc(d.g[t].def)}${d.g[t].bg?` <span class="muted">(배경: ${esc(d.g[t].bg)})</span>`:''}</li>`).join('')}</ul>`:''}
+    ${imgs.length?`<h4 style="margin-top:10px">시각 자료</h4><div class="gal">${imgs.slice(0,4).map(k=>figure(d.images[k],k,d.no)).join('')}</div>`:''}
+    <div class="row" style="margin-top:10px"><button class="btn-sm" onclick="openSummary(${d.no})">${pad(d.no)}강 단원 정리 보기</button><button class="btn-sm on" onclick="startSession({ch:${d.no},mode:'study'})">${pad(d.no)}강 별채우기 학습</button></div></div>`;
+}
+function pick(id,n){ const s=S.sess; s.answers[id]=n; persist(s); const d=resolve(id).d; const el=$('#q-'+id); el.outerHTML = examCard(d.exam.find(e=>e.id===id), d, s, el.dataset.num); }
+function checkEx(id){ const s=S.sess, d=resolve(id).d, e=d.exam.find(x=>x.id===id); if (!s.answers[id]) { toast('보기를 먼저 고르세요'); return; }
+  const ok = (s.answers[id]===e.answer);
+  if (s.mode==='daily') { if (!s.items.includes(id)) s.items.push(id); s.checked[id]=true; s.results[id]=ok; s.total=s.items.length; recount(s); srsUpdate(id, ok); persist(s); }
+  else recordResult(id, ok);
+  const el=$('#q-'+id); if (el) { const num=el.dataset.num; el.outerHTML = examCard(e,d,s,num); }
+  if (S.screen==='study') $('#st-foot').innerHTML = `<button class="pill-btn" style="flex:1" onclick="afterItem()">다음 →</button>`;
+  if (S.screen==='daily') dailyFoot();
+}
 
+/* ---------- DAILY (오늘의 문제: 기출 2문제씩) ---------- */
+async function loadExamAll(){ if (!S.examAll) S.examAll = await (await fetch('data/exam_all.json')).json(); return S.examAll; }
+function dailySession(){ const id = 'daily-'+dayKey(Date.now()); let s = sessions.find(x=>x.id===id); if (!s) { s = { id, ch:0, mode:'daily', start:Date.now(), updated:Date.now(), status:'done', items:[], queue:[], answers:{}, results:{}, checked:{}, attempts:{}, total:0, correct:0, wrong:0 }; persist(s); } return s; }
+async function startDaily(){
+  await loadIndex(); const all = await loadExamAll(); const s = dailySession(); S.sess = s;
+  const now = Date.now(); const ids = all.map(x=>x.id);
+  const due = ids.filter(k => PROG[k] && PROG[k].due <= now && !s.checked[k]).sort((a,b)=>PROG[a].due-PROG[b].due);
+  const fresh = ids.filter(k => !PROG[k] && !s.checked[k]);
+  const pick = []; if (due.length) pick.push(due[0]);
+  const pool = fresh.length ? fresh : ids.filter(k=>!s.checked[k]);
+  while (pick.length < 2 && pool.length) { const k = pool[Math.floor(Math.random()*pool.length)]; if (!pick.includes(k)) pick.push(k); if (pool.length < 2) break; }
+  if (!pick.length) { toast('오늘 풀 수 있는 문제를 모두 풀었습니다'); return; }
+  S.daily = pick; for (const k of pick) await loadCh(parseKey(k).ch);
+  renderDaily();
+}
+function renderDaily(){
+  const s = S.sess; const all = S.examAll; const seen = examSeen();
+  $('#daily-left').textContent = `${all.length - seen}문제 남음`;
+  $('#daily-body').innerHTML = S.daily.map((k,i) => { const r = resolve(k); return `<div class="daily-card" data-k="${k}">${examCard(r.e, r.d, s, i+1).replace('<div class="q ex"', '<div class="q ex" data-num="'+(i+1)+'"')}</div>`; }).join('');
+  dailyFoot(); go('daily');
+}
+function dailyFoot(){ const s=S.sess; const left = S.daily.filter(k=>!s.checked[k]).length; $('#daily-foot').innerHTML = `<div class="small muted" style="flex:1;align-self:center">오늘 ${s.correct+s.wrong}문제 · 정답 ${s.correct}</div><button class="pill-btn ${left?'ghost':''}" style="flex:1.2" onclick="${left?`showConfirm('아직 ${left}문제를 풀지 않았습니다. 다음으로 넘어갈까요?', startDaily)`:'startDaily()'}">다음 학습 →</button>`; }
 /* ---------- RESULT ---------- */
 function qCardResult(key, s){
   const r = resolve(key); if (!r) return ''; const q = r.q; const ok = s.results[key];
@@ -528,7 +611,7 @@ function qCardResult(key, s){
     <div id="info-${key}" hidden>${qInfoHtml(key, null)}</div></div>`;
 }
 async function openResult(id){
-  const s = sessions.find(x=>x.id===id); if (!s) return; await loadIndex(); for (const k of new Set(s.items.map(k => parseKey(k).ch))) await loadCh(k); const d = S.ch[s.ch]; S.sess = s;
+  const s = sessions.find(x=>x.id===id); if (!s) return; await loadIndex(); for (const k of new Set(s.items.map(k => parseKey(k).ch))) await loadCh(k); const d = S.ch[s.ch] || S.ch[parseKey(s.items[0]).ch]; S.sess = s;
   const chs = [...new Set(s.items.map(k => parseKey(k).ch))];
   $('#rs-sub').textContent = `${chs.map(c=>pad(c)+'강').join('·')} ${chs.length===1?d.title:''} · ${modeName(s.mode)}`;
   $('#rs-title').innerHTML = `${s.total}문항 중 <span style="text-decoration:underline">${s.correct+s.wrong}</span>문항 학습`;
@@ -536,7 +619,7 @@ async function openResult(id){
   const wrongKeys = s.items.filter(i => !s.results[i]);
   $('#rs-body').innerHTML = `<div class="row" style="padding:12px 0 4px"><span class="pct">정답률 ${Math.round(100*s.correct/Math.max(1,s.total))}%</span><span class="small muted">첫 시도 기준 · ○ 정답 · ✕ 오답(정답 표시)</span></div>` +
     s.items.map(k => parseKey(k).exam ? examCard(resolve(k).e, resolve(k).d, s) : qCardResult(k, s)).join('') +
-    `<div style="display:flex;gap:8px;margin-top:16px">${wrongKeys.length && s.mode!=='exam' ? `<button class="pill-btn o" onclick="startSession({mode:'retry',keys:${JSON.stringify(wrongKeys)}})">오답 ${wrongKeys.length}문항 다시 풀기</button>`:''}<button class="pill-btn ghost" onclick="openChapter(${s.ch})">단원으로</button></div>`;
+    `<div style="display:flex;gap:8px;margin-top:16px">${wrongKeys.length && s.mode!=='exam' ? `<button class="pill-btn o" onclick="startSession({mode:'retry',keys:${JSON.stringify(wrongKeys)}})">오답 ${wrongKeys.length}문항 다시 풀기</button>`:''}<button class="pill-btn ghost" onclick="${s.ch?`openChapter(${s.ch})`:`go('home')`}">${s.ch?'단원으로':'홈으로'}</button></div>`;
   document.body.classList.remove('study-on'); go('result');
 }
 
@@ -564,17 +647,17 @@ function listHtml(){
   let list = sessions.filter(s=>s.status==='done'); if (S.mineRange==='day') list = list.filter(s=>dayKey(s.start)===S.selDate);
   list = list.slice().sort((a,b)=>b.start-a.start);
   let h = '';
-  if (open) h += `<div class="bigcard"><div class="live" onclick="resumeSession('${open.id}')" style="cursor:pointer"><div><div style="font-size:26px">✎</div><div class="ttl">채점 대기 중입니다.</div></div><div class="mini"><span><b>교재</b>${modeName(open.mode)}</span><span><b>학습</b>${Object.keys(open.checked).length}/${open.total}</span></div></div>${list[0]?`<div class="card" style="display:flex;flex-direction:column;justify-content:space-between;cursor:pointer" onclick="openResult('${list[0].id}')"><div class="row">${thumb(list[0].ch,chInfo(list[0].ch).era,'thumb')}<div style="min-width:0"><div class="b small">${esc(chInfo(list[0].ch).title)}</div><div class="hl" style="font-size:20px;font-weight:900">${Math.round(100*list[0].correct/list[0].total)}%</div></div></div><div class="row small"><span class="chip b">정답</span>${list[0].correct}문항</div></div>`:''}</div>`;
+  if (open) h += `<div class="bigcard"><div class="live" onclick="resumeSession('${open.id}')" style="cursor:pointer"><div><div style="font-size:26px">✎</div><div class="ttl">채점 대기 중입니다.</div></div><div class="mini"><span><b>교재</b>${modeName(open.mode)}</span><span><b>학습</b>${Object.keys(open.checked).length}/${open.total}</span></div></div>${list[0]&&list[0].ch?`<div class="card" style="display:flex;flex-direction:column;justify-content:space-between;cursor:pointer" onclick="openResult('${list[0].id}')"><div class="row">${thumb(list[0].ch,chInfo(list[0].ch).era,'thumb')}<div style="min-width:0"><div class="b small">${esc(chInfo(list[0].ch).title)}</div><div class="hl" style="font-size:20px;font-weight:900">${Math.round(100*list[0].correct/list[0].total)}%</div></div></div><div class="row small"><span class="chip b">정답</span>${list[0].correct}문항</div></div>`:''}</div>`;
   if (!list.length) return h + `<div class="empty">${S.mineRange==='day'?'이 날의 채점 기록이 없습니다.':'채점 기록이 없습니다.'}<br><button class="btn-sm on" style="margin-top:10px" onclick="quickStart()">빠른 학습 시작</button></div>`;
-  return h + list.map(s=>`<div class="scard" onclick="openResult('${s.id}')">${thumb(s.ch,chInfo(s.ch).era)}<div class="t"><div class="n">(${modeName(s.mode)}) ${pad(s.ch)}강 ${esc(chInfo(s.ch).title)}</div><div class="m">${s.total}문항 중 <span class="hl">${s.correct+s.wrong}</span>문항 학습 · ${fmtDate(s.start)} ${fmtTime(s.start)}</div><div class="row small" style="margin-top:3px"><span class="chip b">정답</span>${s.correct}문항 <span class="chip o">오답</span>${s.wrong}문항</div></div><div class="badge done">채점<br>완료</div></div>`).join('');
+  return h + list.filter(s=>s.total>0).map(s=>`<div class="scard" onclick="openResult('${s.id}')">${s.ch?thumb(s.ch,chInfo(s.ch).era):'<div class="thumb" style="background:var(--orange)">기출</div>'}<div class="t"><div class="n">(${modeName(s.mode)}) ${s.ch?pad(s.ch)+'강 '+esc(chInfo(s.ch).title):'랜덤 기출'}</div><div class="m">${s.total}문항 중 <span class="hl">${s.correct+s.wrong}</span>문항 학습 · ${fmtDate(s.start)} ${fmtTime(s.start)}</div><div class="row small" style="margin-top:3px"><span class="chip b">정답</span>${s.correct}문항 <span class="chip o">오답</span>${s.wrong}문항</div></div><div class="badge done">채점<br>완료</div></div>`).join('');
 }
 function wrongPool(){ return Object.keys(PROG).filter(k => PROG[k].lastOk===false || (PROG[k].ng>0 && PROG[k].lv<2)).map(k => ({ch:parseKey(k).ch, n:parseKey(k).n, key:k, t:PROG[k].last})); }
 function wrongHtml(){
   let pool = wrongPool(); if (S.mineRange==='day') pool = pool.filter(x=>dayKey(x.t)===S.selDate);
-  const byCh = {}; pool.forEach(x=>(byCh[x.ch] ||= []).push(x.n));
+  const byCh = {}; pool.forEach(x=>(byCh[x.ch] ||= []).push(x.key));
   const chs = Object.keys(byCh).map(Number).sort((a,b)=>a-b);
   if (!chs.length) return `<div class="empty">오답이 없습니다. 🎉</div>`;
-  return `<div style="padding-top:10px">${chs.map(ch=>{ const c=chInfo(ch); const seen=learnedCount(ch); const rate=Math.round(100*byCh[ch].length/Math.max(seen,1)); return `<div class="scard" onclick="startSession({mode:'retry',keys:${JSON.stringify(byCh[ch].sort((a,b)=>a-b).map(n=>keyOf(ch,n)))}})">${thumb(ch,c.era)}<div class="t"><div class="n">${pad(ch)}강 ${esc(c.title)}</div><div class="m">${c.nq}문항 중 <span class="hl">${seen}</span>문항 학습</div><div class="row small" style="margin-top:3px"><span class="chip o">오답</span>${byCh[ch].length}문항</div></div><div style="text-align:right;flex:none"><div class="small muted">오답률</div><div class="b" style="color:var(--orange);font-size:16px">${rate}%</div></div></div>`; }).join('')}</div>
+  return `<div style="padding-top:10px">${chs.map(ch=>{ const c=chInfo(ch); const seen=learnedCount(ch); const rate=Math.round(100*byCh[ch].length/Math.max(seen,1)); return `<div class="scard" onclick="startSession({mode:'retry',keys:${JSON.stringify(byCh[ch])}})">${thumb(ch,c.era)}<div class="t"><div class="n">${pad(ch)}강 ${esc(c.title)}</div><div class="m">${c.nq}문항 중 <span class="hl">${seen}</span>문항 학습</div><div class="row small" style="margin-top:3px"><span class="chip o">오답</span>${byCh[ch].length}문항</div></div><div style="text-align:right;flex:none"><div class="small muted">오답률</div><div class="b" style="color:var(--orange);font-size:16px">${rate}%</div></div></div>`; }).join('')}</div>
   <div style="margin-top:16px"><button class="pill-btn" onclick="retryAllWrong()">오답 전체 다시 풀기 (${pool.length})</button><div class="small muted" style="text-align:center;margin-top:6px">ⓘ 강별로 누르면 그 강의 오답만 다시 풉니다.</div></div>`;
 }
 function retryAllWrong(){ const pool = wrongPool(); if (!pool.length) return; startSession({mode:'retry', keys:pool.map(x=>x.key)}); }
@@ -595,7 +678,7 @@ function reportHtml(){
   const improved = everWrong.size ? Math.round(100*(everWrong.size-pool.length)/everWrong.size) : 0;
   const latest = today[0] || done[0];
   return `<div class="card" style="margin-top:14px"><div class="sect" style="margin:0 0 8px">데일리 리포트 <span class="muted small">${fmtDate(Date.now())}</span></div>
-    ${latest?`<div class="row" style="margin-bottom:10px">${thumb(latest.ch,chInfo(latest.ch).era,'thumb')}<div style="min-width:0"><div class="b">${pad(latest.ch)}강 ${esc(chInfo(latest.ch).title)}</div><div class="small muted">${latest.total}문항 중 <span class="hl">${latest.correct+latest.wrong}</span>문항 학습</div></div></div>`:`<div class="small muted" style="margin-bottom:10px">오늘 학습 기록이 없습니다.</div>`}
+    ${latest?`<div class="row" style="margin-bottom:10px">${latest.ch?thumb(latest.ch,chInfo(latest.ch).era,'thumb'):'<div class="thumb" style="background:var(--orange)">기출</div>'}<div style="min-width:0"><div class="b">${latest.ch?pad(latest.ch)+'강 '+esc(chInfo(latest.ch).title):'오늘의 문제'}</div><div class="small muted">${latest.total}문항 중 <span class="hl">${latest.correct+latest.wrong}</span>문항 학습</div></div></div>`:`<div class="small muted" style="margin-bottom:10px">오늘 학습 기록이 없습니다.</div>`}
     <div class="donut">${donut}<div class="legend"><div class="l"><span class="sw" style="background:var(--blue)"></span>정답률 <b style="color:var(--blue)">${pc}%</b></div><div class="bar" style="background:var(--blue);width:${Math.max(pc,2)}%;max-width:160px"></div><div class="l" style="margin-top:8px"><span class="sw" style="background:var(--orange)"></span>오답률 <b style="color:var(--orange)">${tT?100-pc:0}%</b></div><div class="bar" style="background:var(--orange);width:${tT?Math.max(100-pc,2):2}%;max-width:160px"></div><div class="small muted" style="margin-top:8px">오늘 ${tT}문항 (${today.length}회 채점)</div></div></div></div>
   <div class="card" style="margin-top:12px"><div class="sect" style="margin:0 0 4px">주간 리포트</div>
     <div class="kv"><span class="k">학습일</span><span class="num">${studyDays.length?`${fmtDate(studyDays[0])} ~ ${fmtDate(studyDays[studyDays.length-1])} (${studyDays.length}일)`:'—'}</span></div>
@@ -727,7 +810,7 @@ function lightboxSrc(src, cap, credit, link){ const lb=document.createElement('d
 document.addEventListener('keydown', e => { if (e.key==='Escape') { closePop(); closeOv(); document.querySelector('.lightbox')?.remove(); } });
 
 /* Android back button (native wrapper) */
-window.appBack = function(){ const lb=document.querySelector('.lightbox'); if (lb) { lb.remove(); return true; } if (ovEl) { closeOv(); return true; } if (popEl) { closePop(); return true; } if (S.screen==='study') { leaveStudy(); return true; } if (S.screen==='result') { go(backTo||'mine'); return true; } if (S.screen!=='home') { go('home'); return true; } return false; };
+window.appBack = function(){ const lb=document.querySelector('.lightbox'); if (lb) { lb.remove(); return true; } if (ovEl) { closeOv(); return true; } if (popEl) { closePop(); return true; } if (S.screen==='study') { leaveStudy(); return true; } if (S.screen==='result' || S.screen==='daily') { go(backTo||'home'); return true; } if (S.screen!=='home') { go('home'); return true; } return false; };
 /* PWA: service worker (GitHub Pages / own hosting only; silently skipped elsewhere) */
 let SW = null;
 try { if ('serviceWorker' in navigator && location.protocol==='https:' && !/claude\.ai$/.test(location.hostname)) { navigator.serviceWorker.register('./sw.js').then(r => { SW = r; }).catch(()=>{}); } } catch(e) {}
