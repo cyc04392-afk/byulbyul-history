@@ -221,6 +221,8 @@ body.study-on .nav{display:none}
 .ex .qtop{display:flex;align-items:center;gap:6px;margin-bottom:4px}
 .ex .qtop .sp{flex:1}
 .ex .qnum{font-weight:900;font-size:15px}
+.mimg{margin:8px 0 4px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;cursor:zoom-in}
+.mimg img{width:100%;display:block}
 .expl{background:var(--blue-s);border-radius:10px;padding:10px 12px;font-size:13px;margin:8px 0}
 .expl h5{margin:0 0 4px;font-size:12px;color:var(--blue)}
 .optx{font-size:12px;color:var(--muted);padding:2px 0 6px 38px;line-height:1.5}
@@ -567,7 +569,8 @@ function doFinish(){ const s=S.sess; s.status='done'; s.end=Date.now(); s.total 
 /* exam */
 function examCard(e, d, s, num){
   const checked = s.checked[e.id], sel = s.answers[e.id]; const L = !checked;
-  const mat = e.material ? `<div class="mat">${highlight(e.material, d, e.kw, null, L)}</div>` : '';
+  const matText = e.material ? `<div class="mat">${highlight(e.material, d, e.kw, null, L)}</div>` : '';
+  const mat = e.mi ? `<div class="mimg" onclick="lightboxIm(this.firstChild)">${imgTag({cap:'문제 자료 (공식 문제지)', credit:'한국사능력검정시험 공식 문제지', src:'', sp:e.mi.sp, spf:e.mi.spf}, d.no)}</div>${e.material?`<button class="btn-sm" style="margin:2px 0 6px" onclick="const t=this.nextElementSibling;t.hidden=!t.hidden">자료 글로 보기 ▾</button><div hidden>${matText}</div>`:''}` : matText;
   const imgs = (e.img||[]).map(k=>d.images[k]).filter(Boolean);
   return `<div class="q ex" id="q-${e.id}"><div class="qtop"><span class="qnum">${num?num+'.':''}</span><span class="src"><span class="tag">기출</span>${esc(e.src)}</span><span class="sp"></span>${srsTag(e.id)}</div>
     <div class="stem">${highlight(e.stem, d, e.kw, null, L)}</div>${mat}${imgs.length?`<div class="gal">${imgs.map((im,i)=>figure(im,e.img[i],d.no)).join('')}</div>`:''}
@@ -820,11 +823,11 @@ function lightbox(no, key){ const im = S.ch[no]?.images[key]; if (!im) return; i
 function lightboxIm(img){ if (!img) return; const cap = img.alt, cr = img.dataset.credit||'', src = img.dataset.src||''; if (img.src) lightboxSrc(img.src, cap, cr, src); }
 /* sprite sheets: one JPEG per chapter; crop on demand */
 const SPR = {};
-function spriteImg(no){ return SPR[no] ||= new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = `sp/ch${pad(no)}.jpg`; }); }
+function spriteImg(no, spf){ const f = spf || `sp/ch${pad(no)}.jpg`; return SPR[f] ||= new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = f; }); }
 const SPU = {};
-async function spriteUrl(no, im){ const k = no+':'+im.sp.join(','); if (SPU[k]) return SPU[k]; const sheet = await spriteImg(no); const [y,w,h] = im.sp; const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(sheet, 0, y, w, h, 0, 0, w, h); const url = await new Promise(r => c.toBlob(b => r(URL.createObjectURL(b)), 'image/jpeg', 0.9)); SPU[k] = url; return url; }
-function imgTag(im, no, small){ const a = `alt="${esc(im.cap)}" data-credit="${esc(im.credit||'')}" data-src="${esc(im.src||'')}"`; if (im.sp) return `<img ${a} data-sp="${no}" data-y="${im.sp[0]}" data-w="${im.sp[1]}" data-h="${im.sp[2]}" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${im.sp[1]}' height='${im.sp[2]}'%3E%3C/svg%3E" style="background:var(--soft)">`; return `<img ${a} src="img/${im.file}" loading="lazy">`; }
-new MutationObserver(() => { document.querySelectorAll('img[data-sp]:not([data-done])').forEach(el => { el.dataset.done = '1'; const no = +el.dataset.sp; spriteUrl(no, {sp:[+el.dataset.y, +el.dataset.w, +el.dataset.h]}).then(u => { el.src = u; el.style.background=''; }).catch(()=>{}); }); }).observe(document.body, {childList:true, subtree:true});
+async function spriteUrl(no, im){ const k = (im.spf||no)+':'+im.sp.join(','); if (SPU[k]) return SPU[k]; const sheet = await spriteImg(no, im.spf); const [y,w,h] = im.sp; const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(sheet, 0, y, w, h, 0, 0, w, h); const url = await new Promise(r => c.toBlob(b => r(URL.createObjectURL(b)), 'image/jpeg', 0.9)); SPU[k] = url; return url; }
+function imgTag(im, no, small){ const a = `alt="${esc(im.cap)}" data-credit="${esc(im.credit||'')}" data-src="${esc(im.src||'')}"`; if (im.sp) return `<img ${a} data-sp="${no}" ${im.spf?`data-spf="${im.spf}"`:''} data-y="${im.sp[0]}" data-w="${im.sp[1]}" data-h="${im.sp[2]}" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${im.sp[1]}' height='${im.sp[2]}'%3E%3C/svg%3E" style="background:var(--soft)">`; return `<img ${a} src="img/${im.file}" loading="lazy">`; }
+new MutationObserver(() => { document.querySelectorAll('img[data-sp]:not([data-done])').forEach(el => { el.dataset.done = '1'; const no = +el.dataset.sp; spriteUrl(no, {sp:[+el.dataset.y, +el.dataset.w, +el.dataset.h], spf: el.dataset.spf||null}).then(u => { el.src = u; el.style.background=''; }).catch(()=>{}); }); }).observe(document.body, {childList:true, subtree:true});
 function lightboxSrc(src, cap, credit, link){ const lb=document.createElement('div'); lb.className='lightbox'; lb.innerHTML=`<button class="x" onclick="this.parentNode.remove()">✕</button><div class="im"><img src="${src}" alt="${esc(cap||'')}"></div><div class="cap">${esc(cap||'')}${credit?`<br><span style="opacity:.7">${esc(credit)}</span>`:''}${link?` <a href="${esc(link)}" target="_blank" rel="noopener">원본 보기</a>`:''}</div>`; lb.addEventListener('click', e=>{ if (e.target.classList.contains('im')) lb.remove(); }); document.body.appendChild(lb); }
 document.addEventListener('keydown', e => { if (e.key==='Escape') { closePop(); closeOv(); document.querySelector('.lightbox')?.remove(); } });
 
@@ -837,6 +840,7 @@ async function offlineAll(){
   if (!SW || !window.caches) { toast('이 환경에서는 오프라인 저장을 지원하지 않습니다'); return; }
   const idx = await loadIndex(); const list = ['./','./index.html','./data/index.json','./data/glossary.json','./data/exam_all.json'];
   idx.chapters.forEach(c => { list.push(`./data/ch${pad(c.no)}.json`); list.push(`./sp/ch${pad(c.no)}.jpg`); });
+  ['60','62','64','66','68','70','72','73','74','75','76','77','78','79'].forEach(r => list.push(`./sp/ex${r}.jpg`));
   for (let p=1;p<=70;p++) list.push(`./notes/p-${pad(p)}.jpg`);
   for (const c of idx.chapters) { const d = await loadCh(c.no); Object.values(d.images).forEach(im => { if (!im.sp) list.push('./img/'+im.file); }); }
   const uniq = [...new Set(list)]; const cache = await caches.open('byul-v1'); let done = 0; const btn = $('#offbtn');
