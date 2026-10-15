@@ -246,14 +246,14 @@ body.study-on .backdaily{bottom:calc(70px + env(safe-area-inset-bottom,0px))}
 
   <!-- DAILY (오늘의 문제) -->
   <section class="screen" id="s-daily">
-    <div class="hdr"><button class="ic" onclick="go('home')">←</button><span class="b">오늘의 문제</span><span class="small muted" id="daily-left"></span></div>
+    <div class="hdr"><button class="ic" onclick="goBack()">←</button><span class="b">오늘의 문제</span><span class="small muted" id="daily-left"></span></div>
     <div class="content" id="daily-body" style="padding-bottom:20px"></div>
     <div class="sticky-bottom" id="daily-foot"></div>
   </section>
 
   <!-- CHAPTER -->
   <section class="screen" id="s-ch">
-    <div class="hdr"><button class="ic" onclick="go('home')">←</button><span class="b" id="ch-hdr-title"></span><span style="width:36px"></span></div>
+    <div class="hdr"><button class="ic" onclick="goBack()">←</button><span class="b" id="ch-hdr-title"></span><span style="width:36px"></span></div>
     <div class="content" id="ch-body"></div>
   </section>
 
@@ -266,7 +266,7 @@ body.study-on .backdaily{bottom:calc(70px + env(safe-area-inset-bottom,0px))}
 
   <!-- RESULT -->
   <section class="screen" id="s-result">
-    <div class="ghdr"><div class="sub" id="rs-sub"></div><h2 id="rs-title"></h2><div class="row" id="rs-row"></div><button class="x" onclick="go(backTo)">✕</button></div>
+    <div class="ghdr"><div class="sub" id="rs-sub"></div><h2 id="rs-title"></h2><div class="row" id="rs-row"></div><button class="x" onclick="goBack()">✕</button></div>
     <div class="content" id="rs-body"></div>
   </section>
 
@@ -348,8 +348,18 @@ function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('on'); 
 function go(name){
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === 's-'+name));
   document.querySelectorAll('.nav button[data-n]').forEach(b => b.classList.toggle('on', b.dataset.n === name));
-  S.screen = name; closePop(); window.scrollTo(0,0); updateBackDaily();
+  if (S.screen && S.screen!==name && !S._back) { S.hist = S.hist||[]; S.hist.push(S.screen); if (S.hist.length>30) S.hist.shift(); }
+  S._back = false; S.screen = name; closePop(); window.scrollTo(0,0); updateBackDaily();
   if (name==='home') renderHome(); if (name==='mine') renderMine(); if (name==='my') renderMy(); if (name==='more') renderMore();
+}
+function goBack(){
+  const h = S.hist || []; let prev = h.pop();
+  while (prev && (prev==='study' || prev==='result' || prev===S.screen)) prev = h.pop();
+  S._back = true;
+  if (!prev) return go('home');
+  if (prev==='daily') return startDaily(false);
+  if (prev==='ch') return S.cur ? openChapter(S.cur) : go('home');
+  go(prev);
 }
 function chInfo(no){ return S.index.chapters.find(c => c.no === no); }
 function chSessions(no){ return sessions.filter(s => s.ch === no); }
@@ -451,7 +461,7 @@ async function startSession(opts){
   persist(s); S.sess = s; nextItem();
 }
 async function resumeSession(id){ const s = sessions.find(x => x.id===id); if (!s) return; if (!s.queue) { s.queue = s.items.filter(k => !s.checked[k]); } for (const k of new Set(s.items.map(k => parseKey(k).ch))) await loadCh(k); S.sess = s; if (s.cur && !s.checked[s.cur]) renderStudy(); else nextItem(); }
-function leaveStudy(){ const s = S.sess; if (s.status==='progress' && !Object.keys(s.checked).length) { sessions = sessions.filter(x => x.id !== s.id); saveLocal(); if (DB && UID) DB.doc('data/users/'+UID+'/'+s.id).delete().catch(()=>{}); } else persist(s); go('mine'); }
+function leaveStudy(){ const s = S.sess; if (s.status==='progress' && !Object.keys(s.checked).length) { sessions = sessions.filter(x => x.id !== s.id); saveLocal(); if (DB && UID) DB.doc('data/users/'+UID+'/'+s.id).delete().catch(()=>{}); } else persist(s); document.body.classList.remove('study-on'); goBack(); }
 function nextItem(){ const s = S.sess; if (!s.queue.length) { doFinish(); return; } s.cur = s.queue[0]; s.bi = 0; s.attempts[s.cur] = (s.attempts[s.cur]||0); if (s.attempts[s.cur] > 0 || s.mode!=='exam') { delete s.checked[s.cur]; s.answers[s.cur] = []; } persist(s); renderStudy(); }
 function recordResult(key, ok){
   const s = S.sess, now = Date.now(); s.attempts[key] = (s.attempts[key]||0) + 1;
@@ -819,7 +829,7 @@ function lightboxSrc(src, cap, credit, link){ const lb=document.createElement('d
 document.addEventListener('keydown', e => { if (e.key==='Escape') { closePop(); closeOv(); document.querySelector('.lightbox')?.remove(); } });
 
 /* Android back button (native wrapper) */
-window.appBack = function(){ const lb=document.querySelector('.lightbox'); if (lb) { lb.remove(); return true; } if (ovEl) { closeOv(); return true; } if (popEl) { closePop(); return true; } if (S.screen==='study') { leaveStudy(); return true; } if (S.screen==='result' || S.screen==='daily') { go(backTo||'home'); return true; } if (S.screen!=='home') { go('home'); return true; } return false; };
+window.appBack = function(){ const lb=document.querySelector('.lightbox'); if (lb) { lb.remove(); return true; } if (ovEl) { closeOv(); return true; } if (popEl) { closePop(); return true; } if (S.screen==='study') { leaveStudy(); return true; } if (S.screen!=='home') { goBack(); return true; } return false; };
 /* PWA: service worker (GitHub Pages / own hosting only; silently skipped elsewhere) */
 let SW = null;
 try { if ('serviceWorker' in navigator && location.protocol==='https:' && !/claude\.ai$/.test(location.hostname)) { navigator.serviceWorker.register('./sw.js').then(r => { SW = r; }).catch(()=>{}); } } catch(e) {}
