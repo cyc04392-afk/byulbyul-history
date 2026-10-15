@@ -816,7 +816,7 @@ let SW = null;
 try { if ('serviceWorker' in navigator && location.protocol==='https:' && !/claude\.ai$/.test(location.hostname)) { navigator.serviceWorker.register('./sw.js').then(r => { SW = r; }).catch(()=>{}); } } catch(e) {}
 async function offlineAll(){
   if (!SW || !window.caches) { toast('이 환경에서는 오프라인 저장을 지원하지 않습니다'); return; }
-  const idx = await loadIndex(); const list = ['./','./index.html','./data/index.json','./data/glossary.json'];
+  const idx = await loadIndex(); const list = ['./','./index.html','./data/index.json','./data/glossary.json','./data/exam_all.json'];
   idx.chapters.forEach(c => { list.push(`./data/ch${pad(c.no)}.json`); list.push(`./sp/ch${pad(c.no)}.jpg`); });
   for (let p=1;p<=70;p++) list.push(`./notes/p-${pad(p)}.jpg`);
   for (const c of idx.chapters) { const d = await loadCh(c.no); Object.values(d.images).forEach(im => { if (!im.sp) list.push('./img/'+im.file); }); }
