@@ -226,6 +226,9 @@ body.study-on .nav{display:none}
 .optx{font-size:12px;color:var(--muted);padding:2px 0 6px 38px;line-height:1.5}
 .optx.right{color:var(--blue)}
 .daily-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0;box-shadow:var(--shadow)}
+.backdaily{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom,0px));z-index:35;background:var(--fg);color:var(--app);border-radius:999px;padding:9px 16px;font-weight:700;font-size:13px;box-shadow:0 8px 20px rgba(0,0,0,.25);display:none}
+.backdaily.on{display:block}
+body.study-on .backdaily{bottom:calc(70px + env(safe-area-inset-bottom,0px))}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -295,6 +298,7 @@ body.study-on .nav{display:none}
   </div></nav>
 </div>
 <div class="toast" id="toast"></div>
+<button class="backdaily" id="backdaily" onclick="startDaily(false)">↩ 오늘의 문제로 돌아가기</button>
 
 <script>
 /* ---------- state & storage ---------- */
@@ -344,7 +348,7 @@ function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('on'); 
 function go(name){
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === 's-'+name));
   document.querySelectorAll('.nav button[data-n]').forEach(b => b.classList.toggle('on', b.dataset.n === name));
-  S.screen = name; closePop(); window.scrollTo(0,0);
+  S.screen = name; closePop(); window.scrollTo(0,0); updateBackDaily();
   if (name==='home') renderHome(); if (name==='mine') renderMine(); if (name==='my') renderMy(); if (name==='more') renderMore();
 }
 function chInfo(no){ return S.index.chapters.find(c => c.no === no); }
@@ -369,7 +373,7 @@ async function renderHome(){
   $('#home-top').innerHTML = `<div class="hero"><div class="ring"><svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="${r}" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-dasharray="${circ*pct/100} ${circ}" transform="rotate(-90 42 42)"/></svg><div class="pc">${pct}%</div></div>
     <div class="st">별채우기 <b class="num">${bs}</b>/1,057 · 기출 <b class="num">${es}</b>/${totalE}<br>오늘 <b class="num">${todayN}</b>문항 · 연속 <b class="num">${streak}</b>일<br>복습 대기 <b class="num">${due}</b> · 오답 <b class="num">${wrongN}</b></div></div>
     <div class="mainbtns">
-      <button class="mb primary" onclick="startDaily()"><span><span class="t">학습하기</span><br><span class="d">실제 기출 2문제씩 · 랜덤 + 복습</span></span><span style="font-size:26px">▶</span></button>
+      <button class="mb primary" onclick="startDaily(false)"><span><span class="t">${pendingDaily()?'풀던 문제 이어서':'학습하기'}</span><br><span class="d">${pendingDaily()?'오늘의 문제 2문제 중 풀지 않은 것이 있어요':'실제 기출 2문제씩 · 랜덤 + 복습'}</span></span><span style="font-size:26px">▶</span></button>
       <button class="mb o" onclick="startSession({mode:'review'})"><span class="t">복습하기</span><span class="d">복습 예정 ${due}문항 (별채우기+기출)</span></button>
       <button class="mb" onclick="quickStart()"><span class="t">${open?'이어서 풀기':'별채우기'}</span><span class="d">${open?pad(open.ch)+'강 채점 대기 중':'새 문항 + 복습 섞어서'}</span></button>
       <button class="mb" onclick="go('mine');mineTab('wrong')"><span class="t">오답노트</span><span class="d">다시 풀 문항 ${wrongN}개</span></button>
@@ -584,16 +588,21 @@ function checkEx(id){ const s=S.sess, d=resolve(id).d, e=d.exam.find(x=>x.id===i
 /* ---------- DAILY (오늘의 문제: 기출 2문제씩) ---------- */
 async function loadExamAll(){ if (!S.examAll) S.examAll = await (await fetch('data/exam_all.json')).json(); return S.examAll; }
 function dailySession(){ const id = 'daily-'+dayKey(Date.now()); let s = sessions.find(x=>x.id===id); if (!s) { s = { id, ch:0, mode:'daily', start:Date.now(), updated:Date.now(), status:'done', items:[], queue:[], answers:{}, results:{}, checked:{}, attempts:{}, total:0, correct:0, wrong:0 }; persist(s); } return s; }
-async function startDaily(){
+function loadDailyRound(){ try { const r = JSON.parse(localStorage.getItem('byul.daily')||'null'); return (r && r.d===dayKey(Date.now()) && Array.isArray(r.keys)) ? r.keys : null; } catch(e) { return null; } }
+function saveDailyRound(keys){ try { localStorage.setItem('byul.daily', JSON.stringify({d:dayKey(Date.now()), keys})); } catch(e){} }
+function pendingDaily(){ const keys = loadDailyRound(); if (!keys) return false; const s = sessions.find(x=>x.id==='daily-'+dayKey(Date.now())); return keys.some(k => !(s && s.checked[k])); }
+function updateBackDaily(){ const el = $('#backdaily'); if (el) el.classList.toggle('on', S.screen!=='daily' && S.screen!=='home' && pendingDaily()); }
+async function startDaily(fresh){
   await loadIndex(); const all = await loadExamAll(); const s = dailySession(); S.sess = s;
+  if (!fresh) { const keys = loadDailyRound(); if (keys && keys.some(k => !s.checked[k]) && keys.every(k => all.some(x=>x.id===k))) { S.daily = keys; for (const k of keys) await loadCh(parseKey(k).ch); renderDaily(); return; } }
   const now = Date.now(); const ids = all.map(x=>x.id);
   const due = ids.filter(k => PROG[k] && PROG[k].due <= now && !s.checked[k]).sort((a,b)=>PROG[a].due-PROG[b].due);
-  const fresh = ids.filter(k => !PROG[k] && !s.checked[k]);
+  const unseen = ids.filter(k => !PROG[k] && !s.checked[k]);
   const pick = []; if (due.length) pick.push(due[0]);
-  const pool = fresh.length ? fresh : ids.filter(k=>!s.checked[k]);
+  const pool = unseen.length ? unseen : ids.filter(k=>!s.checked[k]);
   while (pick.length < 2 && pool.length) { const k = pool[Math.floor(Math.random()*pool.length)]; if (!pick.includes(k)) pick.push(k); if (pool.length < 2) break; }
   if (!pick.length) { toast('오늘 풀 수 있는 문제를 모두 풀었습니다'); return; }
-  S.daily = pick; for (const k of pick) await loadCh(parseKey(k).ch);
+  S.daily = pick; saveDailyRound(pick); for (const k of pick) await loadCh(parseKey(k).ch);
   renderDaily();
 }
 function renderDaily(){
@@ -602,7 +611,7 @@ function renderDaily(){
   $('#daily-body').innerHTML = S.daily.map((k,i) => { const r = resolve(k); return `<div class="daily-card" data-k="${k}">${examCard(r.e, r.d, s, i+1).replace('<div class="q ex"', '<div class="q ex" data-num="'+(i+1)+'"')}</div>`; }).join('');
   dailyFoot(); go('daily');
 }
-function dailyFoot(){ const s=S.sess; const left = S.daily.filter(k=>!s.checked[k]).length; $('#daily-foot').innerHTML = `<div class="small muted" style="flex:1;align-self:center">오늘 ${s.correct+s.wrong}문제 · 정답 ${s.correct}</div><button class="pill-btn ${left?'ghost':''}" style="flex:1.2" onclick="${left?`showConfirm('아직 ${left}문제를 풀지 않았습니다. 다음으로 넘어갈까요?', startDaily)`:'startDaily()'}">다음 학습 →</button>`; }
+function dailyFoot(){ const s=S.sess; const left = S.daily.filter(k=>!s.checked[k]).length; $('#daily-foot').innerHTML = `<div class="small muted" style="flex:1;align-self:center">오늘 ${s.correct+s.wrong}문제 · 정답 ${s.correct}</div><button class="pill-btn ${left?'ghost':''}" style="flex:1.2" onclick="${left?`showConfirm('아직 ${left}문제를 풀지 않았습니다. 다음으로 넘어갈까요?', ()=>startDaily(true))`:'startDaily(true)'}">다음 학습 →</button>`; }
 /* ---------- RESULT ---------- */
 function qCardResult(key, s){
   const r = resolve(key); if (!r) return ''; const q = r.q; const ok = s.results[key];
