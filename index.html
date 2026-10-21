@@ -235,7 +235,9 @@ body.study-on .nav{display:none}
 .daily-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0;box-shadow:var(--shadow)}
 .backdaily{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom,0px));z-index:35;background:var(--fg);color:var(--app);border-radius:999px;padding:9px 16px;font-weight:700;font-size:13px;box-shadow:0 8px 20px rgba(0,0,0,.25);display:none}
 .backdaily.on{display:block}
-body.study-on .backdaily{bottom:calc(70px + env(safe-area-inset-bottom,0px))}
+body.study-on .backdaily{left:0;right:0;transform:none;width:100%;max-width:430px;margin:0 auto;border-radius:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));text-align:center;box-shadow:0 -4px 14px rgba(0,0,0,.15)}
+body.study-on.pill-on .sticky-bottom{bottom:calc(44px + env(safe-area-inset-bottom,0px))}
+body.study-on.pill-on #st-body{padding-bottom:70px!important}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -610,7 +612,7 @@ function dailySession(){ const id = 'daily-'+dayKey(Date.now()); let s = session
 function loadDailyRound(){ try { const r = JSON.parse(localStorage.getItem('byul.daily')||'null'); return (r && r.d===dayKey(Date.now()) && Array.isArray(r.keys)) ? r.keys : null; } catch(e) { return null; } }
 function saveDailyRound(keys){ try { localStorage.setItem('byul.daily', JSON.stringify({d:dayKey(Date.now()), keys})); } catch(e){} }
 function pendingDaily(){ const keys = loadDailyRound(); if (!keys) return false; const s = sessions.find(x=>x.id==='daily-'+dayKey(Date.now())); return keys.some(k => !(s && s.checked[k])); }
-function updateBackDaily(){ const el = $('#backdaily'); if (el) el.classList.toggle('on', S.screen!=='daily' && S.screen!=='home' && pendingDaily()); }
+function updateBackDaily(){ const el = $('#backdaily'); const on = S.screen!=='daily' && S.screen!=='home' && pendingDaily(); if (el) el.classList.toggle('on', on); document.body.classList.toggle('pill-on', on); }
 async function startDaily(fresh){
   await loadIndex(); const all = await loadExamAll(); const s = dailySession(); S.sess = s;
   if (!fresh) { const keys = loadDailyRound(); if (keys && keys.some(k => !s.checked[k]) && keys.every(k => all.some(x=>x.id===k))) { S.daily = keys; for (const k of keys) await loadCh(parseKey(k).ch); renderDaily(); return; } }
@@ -756,31 +758,48 @@ function renderMore(){
 
 /* ---------- 문항 목록 / 관련 문항 ---------- */
 function fullText(q){ return q.text.replace(/\{\{(.+?)\}\}/g, '$1'); }
-function relatedByul(e, d){
-  const names = []; e.kw.forEach(k => { names.push(k); for (const a in d.alias) if (d.alias[a]===k) names.push(a); const t = d.alias[k]||k; if (t!==k) names.push(t); });
-  const terms = [...new Set(names)].filter(n => n.length >= 2);
+async function loadByulIndex(){ if (!S.bidx) S.bidx = await (await fetch('data/byul_index.json')).json(); return S.bidx; }
+const GENERIC = new Set(['고려','조선','신라','백제','고구려','발해','가야','일본','중국','미국','왕','정부','시대','국왕','백성','농민','사건','문화','정치','경제','사회','조약','개혁','운동','전쟁','교육','종교','불교','유교','학교','신문','단체','군대','수도','지방','중앙','제도']);
+async function relatedByul(e, d){
+  const bidx = await loadByulIndex(); const G = await loadGl();
   const etext = [e.stem, e.material||'', ...(e.options||[])].join(' ');
-  return d.q.map(q => { const ft = fullText(q); let sc = 0; terms.forEach(t => { if (ft.includes(t)) sc += 2; }); (q.kw||[]).forEach(k => { if (k.length>=2 && etext.includes(k)) sc += 1; }); return {q, sc}; })
-    .filter(x => x.sc > 0).sort((a,b) => b.sc - a.sc).slice(0, 8).map(x => x.q);
+  const terms = new Map(); // term -> weight
+  const add = (t, w) => { if (!t || t.length < 2 || GENERIC.has(t)) return; terms.set(t, Math.max(terms.get(t)||0, w)); };
+  e.kw.forEach(k => { add(k, 3); for (const a in d.alias) if (d.alias[a]===k) add(a, 3); const t = d.alias[k]||k; add(t, 3); });
+  // glossary terms that literally appear in the exam text (stem/자료/선지)
+  for (const t in G.g) if (t.length >= 2 && etext.includes(t)) add(t, t.length >= 3 ? 2 : 1);
+  for (const a in G.alias) if (a.length >= 3 && etext.includes(a)) add(a, 2);
+  const scored = bidx.map(b => { let sc = 0; terms.forEach((w, t) => { if (b.t.includes(t)) sc += w; }); if (sc && b.ch === d.no) sc += 1; return {b, sc}; }).filter(x => x.sc >= 2).sort((a,b) => b.sc - a.sc || a.b.ch - b.b.ch || a.b.n - b.b.n);
+  return scored.slice(0, 14).map(x => x.b.k);
 }
-function studyChoice(eid){
-  const r = resolve(eid); if (!r) return; const d = r.d, e = r.e; const rel = relatedByul(e, d);
-  overlay(`<div class="b" style="font-size:16px;margin-bottom:4px">${pad(d.no)}강 ${esc(d.title)}</div><div class="small muted" style="margin-bottom:12px">이 기출과 관련된 별채우기 문항 ${rel.length}개를 찾았습니다.</div>
+async function studyChoice(eid){
+  const r = resolve(eid); if (!r) return; const d = r.d, e = r.e; toast('관련 문항 찾는 중…'); const rel = await relatedByul(e, d);
+  const chs = [...new Set(rel.map(k => parseKey(k).ch))];
+  overlay(`<div class="b" style="font-size:16px;margin-bottom:4px">${pad(d.no)}강 ${esc(d.title)}</div><div class="small muted" style="margin-bottom:12px">지문·선지에 나온 내용과 관련된 별채우기 문항 ${rel.length}개를 찾았습니다${chs.length>1?` (${chs.map(c=>c+'강').join('·')})`:''}.</div>
     <div style="display:grid;gap:8px">
-      <button class="pill-btn" ${rel.length?'':'disabled style="opacity:.5"'} onclick="closeOv();openChapter(${d.no}).then(()=>openQList(${d.no}, ${JSON.stringify(rel.map(q=>q.n))}, '${eid}'))">관련 문항만 보기 (${rel.length})</button>
+      <button class="pill-btn" ${rel.length?'':'disabled style="opacity:.5"'} onclick="closeOv();openChapter(${d.no}).then(()=>openRelList(${jsArr(rel)}, '${eid}'))">관련 문항만 보기 (${rel.length})</button>
       <button class="pill-btn ghost" onclick="closeOv();openChapter(${d.no})">${pad(d.no)}강 전체 학습</button>
     </div>`, 'sheet');
+}
+function qListItem(no, q, d){
+  const p = PROG[keyOf(no,q.n)]; const stat = !p ? '<span class="chip gray">미학습</span>' : (p.due <= Date.now() ? '<span class="chip lo">복습 예정</span>' : `<span class="chip lg">단계 ${p.lv}</span>`);
+  return `<div class="qi"><div class="qi-h"><span class="qn-s">${q.n}</span>${stat}<span class="sp"></span><button class="btn-sm" onclick="closeOv();startSession({mode:'pick',ch:${no},keys:['${keyOf(no,q.n)}']})">풀기</button><button class="btn-sm" onclick="const t=this.closest('.qi').querySelector('.qi-info');t.hidden=!t.hidden">정보</button></div>
+      <div class="qi-t">${q.text.split(/(\{\{.+?\}\})/).map(p => { const m = p.match(/^\{\{(.+?)\}\}$/); return m ? `<b class="hl">${esc(m[1])}</b>` : highlight(p, d, q.kw, null); }).join('')}</div>
+      <div class="qi-info" hidden>${qInfoHtml(keyOf(no,q.n), null)}</div></div>`;
+}
+async function openRelList(keys, eid){
+  const chs = [...new Set(keys.map(k => parseKey(k).ch))]; for (const c of chs) await loadCh(c);
+  overlay(`<div class="row" style="justify-content:space-between;margin-bottom:6px"><div class="b" style="font-size:16px">관련 별채우기 문항 <span class="muted small">${keys.length}개</span></div></div>
+    <div class="small muted" style="margin-bottom:8px">기출의 지문·선지에 나온 내용과 겹치는 문항입니다. 다른 강의 문항도 함께 모았습니다.</div>
+    <div class="row" style="margin-bottom:10px"><button class="pill-btn" style="flex:1" onclick="closeOv();startSession({mode:'pick',ch:${parseKey(keys[0]).ch},keys:${jsArr(keys)}})">이 ${keys.length}문항 풀기</button></div>
+    <div class="qlist">${chs.map(c => { const d = S.ch[c]; const ks = keys.filter(k => parseKey(k).ch===c); return `<div class="sect" style="margin:12px 0 2px">${pad(c)}강 ${esc(d.title)} <button onclick="closeOv();openChapter(${c}).then(()=>openQList(${c}))">전체 목록 ›</button></div>` + ks.map(k => qListItem(c, d.q.find(q => q.n===parseKey(k).n), d)).join(''); }).join('')}</div>`, 'sheet');
 }
 async function openQList(no, only, fromExam){
   const d = await loadCh(no); const list = only ? d.q.filter(q => only.includes(q.n)) : d.q;
   const keys = list.map(q => keyOf(no, q.n));
-  const stat = q => { const p = PROG[keyOf(no,q.n)]; if (!p) return '<span class="chip gray">미학습</span>'; if (p.due <= Date.now()) return '<span class="chip lo">복습 예정</span>'; return `<span class="chip lg">단계 ${p.lv}</span>`; };
   overlay(`<div class="row" style="justify-content:space-between;margin-bottom:6px"><div class="b" style="font-size:16px">${pad(no)}강 문항 목록 <span class="muted small">${list.length}${only?'/'+d.q.length:''}개</span></div>${only?`<button class="btn-sm" onclick="closeOv();openQList(${no})">전체 보기</button>`:''}</div>
-    ${fromExam?`<div class="small muted" style="margin-bottom:8px">기출 문제와 관련된 문항만 모았습니다.</div>`:''}
     <div class="row" style="margin-bottom:10px"><button class="pill-btn" style="flex:1" onclick="closeOv();startSession({mode:'pick',ch:${no},keys:${jsArr(keys)}})">이 ${list.length}문항 풀기</button></div>
-    <div class="qlist">${list.map(q => `<div class="qi"><div class="qi-h"><span class="qn-s">${q.n}</span>${stat(q)}<span class="sp"></span><button class="btn-sm" onclick="closeOv();startSession({mode:'pick',ch:${no},keys:['${keyOf(no,q.n)}']})">풀기</button><button class="btn-sm" onclick="const t=this.closest('.qi').querySelector('.qi-info');t.hidden=!t.hidden">정보</button></div>
-      <div class="qi-t">${q.text.split(/(\{\{.+?\}\})/).map(p => { const m = p.match(/^\{\{(.+?)\}\}$/); return m ? `<b class="hl">${esc(m[1])}</b>` : highlight(p, d, q.kw, null); }).join('')}</div>
-      <div class="qi-info" hidden>${qInfoHtml(keyOf(no,q.n), null)}</div></div>`).join('')}</div>`, 'sheet');
+    <div class="qlist">${list.map(q => qListItem(no, q, d)).join('')}</div>`, 'sheet');
 }
 /* ---------- DICTIONARY / SUMMARY / NOTES ---------- */
 async function openDict(no){
@@ -872,7 +891,7 @@ let SW = null;
 try { if ('serviceWorker' in navigator && location.protocol==='https:' && !/claude\.ai$/.test(location.hostname)) { navigator.serviceWorker.register('./sw.js').then(r => { SW = r; }).catch(()=>{}); } } catch(e) {}
 async function offlineAll(){
   if (!SW || !window.caches) { toast('이 환경에서는 오프라인 저장을 지원하지 않습니다'); return; }
-  const idx = await loadIndex(); const list = ['./','./index.html','./data/index.json','./data/glossary.json','./data/exam_all.json'];
+  const idx = await loadIndex(); const list = ['./','./index.html','./data/index.json','./data/glossary.json','./data/exam_all.json','./data/byul_index.json'];
   idx.chapters.forEach(c => { list.push(`./data/ch${pad(c.no)}.json`); list.push(`./sp/ch${pad(c.no)}.jpg`); });
   ['60','62','64','66','68','70','72','73','74','75','76','77','78','79'].forEach(r => list.push(`./sp/ex${r}.jpg`));
   for (let p=1;p<=70;p++) list.push(`./notes/p-${pad(p)}.jpg`);
