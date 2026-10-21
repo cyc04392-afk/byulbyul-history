@@ -232,6 +232,9 @@ body.study-on .nav{display:none}
 .expl h5{margin:0 0 4px;font-size:12px;color:var(--blue)}
 .optx{font-size:12px;color:var(--muted);padding:2px 0 6px 38px;line-height:1.5}
 .optx.right{color:var(--blue)}
+#daily-foot{bottom:calc(66px + env(safe-area-inset-bottom,0px))}
+.daily-next{margin:6px 0 10px;text-align:center}
+.daily-next .pill-btn{font-size:16px;padding:14px}
 .daily-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0;box-shadow:var(--shadow)}
 .backdaily{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom,0px));z-index:35;background:var(--fg);color:var(--app);border-radius:999px;padding:9px 16px;font-weight:700;font-size:13px;box-shadow:0 8px 20px rgba(0,0,0,.25);display:none}
 .backdaily.on{display:block}
@@ -629,10 +632,12 @@ async function startDaily(fresh){
 function renderDaily(){
   const s = S.sess; const all = S.examAll; const seen = examSeen();
   $('#daily-left').textContent = `${all.length - seen}문제 남음`;
-  $('#daily-body').innerHTML = S.daily.map((k,i) => { const r = resolve(k); return `<div class="daily-card" data-k="${k}">${examCard(r.e, r.d, s, i+1).replace('<div class="q ex"', '<div class="q ex" data-num="'+(i+1)+'"')}</div>`; }).join('');
+  $('#daily-body').innerHTML = S.daily.map((k,i) => { const r = resolve(k); return `<div class="daily-card" data-k="${k}">${examCard(r.e, r.d, s, i+1).replace('<div class="q ex"', '<div class="q ex" data-num="'+(i+1)+'"')}</div>`; }).join('') + `<div class="daily-next" id="daily-next"></div>`;
   dailyFoot(); go('daily');
 }
-function dailyFoot(){ const s=S.sess; const left = S.daily.filter(k=>!s.checked[k]).length; $('#daily-foot').innerHTML = `<div class="small muted" style="flex:1;align-self:center">오늘 ${s.correct+s.wrong}문제 · 정답 ${s.correct}</div><button class="pill-btn ${left?'ghost':''}" style="flex:1.2" onclick="${left?`showConfirm('아직 ${left}문제를 풀지 않았습니다. 다음으로 넘어갈까요?', ()=>startDaily(true))`:'startDaily(true)'}">다음 학습 →</button>`; }
+function dailyFoot(){ const s=S.sess; const left = S.daily.filter(k=>!s.checked[k]).length; const btn = `<button class="pill-btn ${left?'ghost':''}" style="flex:1.2" onclick="${left?`showConfirm('아직 ${left}문제를 풀지 않았습니다. 다음으로 넘어갈까요?', ()=>startDaily(true))`:'startDaily(true)'}">다음 문제 → <span class="small" style="font-weight:500">(2문제)</span></button>`;
+  $('#daily-foot').innerHTML = `<div class="small muted" style="flex:1;align-self:center">오늘 ${s.correct+s.wrong}문제 · 정답 ${s.correct}</div>${btn}`;
+  const nx = $('#daily-next'); if (nx) nx.innerHTML = left ? `<div class="small muted">${left}문제를 더 풀면 다음 문제로 넘어갈 수 있어요</div>` : `${btn}<div class="small muted" style="margin-top:6px">오늘 ${s.correct+s.wrong}문제 풀이 · 정답 ${s.correct} · 남은 기출 ${S.examAll.length - examSeen()}문제</div>`; }
 /* ---------- RESULT ---------- */
 function qCardResult(key, s){
   const r = resolve(key); if (!r) return ''; const q = r.q; const ok = s.results[key];
