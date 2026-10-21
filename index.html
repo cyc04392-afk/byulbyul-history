@@ -302,11 +302,11 @@ body.study-on.pill-on #st-body{padding-bottom:70px!important}
   </section>
 
   <nav class="nav"><div class="in">
-    <button data-n="home" onclick="go('home')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>홈</button>
-    <button data-n="mine" onclick="go('mine')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/></svg>내 학습</button>
-    <button class="center" onclick="quickStart()"><span class="fab"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M5 4l14 8-14 8z"/></svg></span>빠른 학습</button>
-    <button data-n="my" onclick="go('my')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>마이페이지</button>
-    <button data-n="more" onclick="go('more')"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>더보기</button>
+    <button data-n="home" onclick="navGo('home')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>홈</button>
+    <button data-n="mine" onclick="navGo('mine')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/></svg>내 학습</button>
+    <button class="center" onclick="S.detour=false;quickStart()"><span class="fab"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M5 4l14 8-14 8z"/></svg></span>빠른 학습</button>
+    <button data-n="my" onclick="navGo('my')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>마이페이지</button>
+    <button data-n="more" onclick="navGo('more')"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>더보기</button>
   </div></nav>
 </div>
 <div class="toast" id="toast"></div>
@@ -365,6 +365,7 @@ function go(name){
   S._back = false; S.screen = name; closePop(); window.scrollTo(0,0); updateBackDaily();
   if (name==='home') renderHome(); if (name==='mine') renderMine(); if (name==='my') renderMy(); if (name==='more') renderMore();
 }
+function navGo(name){ S.detour = false; S.hist = []; go(name); }
 function goBack(){
   const h = S.hist || []; let prev = h.pop();
   while (prev && (prev==='study' || prev==='result' || prev===S.screen)) prev = h.pop();
@@ -615,9 +616,9 @@ function dailySession(){ const id = 'daily-'+dayKey(Date.now()); let s = session
 function loadDailyRound(){ try { const r = JSON.parse(localStorage.getItem('byul.daily')||'null'); return (r && r.d===dayKey(Date.now()) && Array.isArray(r.keys)) ? r.keys : null; } catch(e) { return null; } }
 function saveDailyRound(keys){ try { localStorage.setItem('byul.daily', JSON.stringify({d:dayKey(Date.now()), keys})); } catch(e){} }
 function pendingDaily(){ const keys = loadDailyRound(); if (!keys) return false; const s = sessions.find(x=>x.id==='daily-'+dayKey(Date.now())); return keys.some(k => !(s && s.checked[k])); }
-function updateBackDaily(){ const el = $('#backdaily'); const on = S.screen!=='daily' && S.screen!=='home' && pendingDaily(); if (el) el.classList.toggle('on', on); document.body.classList.toggle('pill-on', on); }
+function updateBackDaily(){ const el = $('#backdaily'); const on = !!S.detour && S.screen!=='daily' && S.screen!=='home'; if (el) el.classList.toggle('on', on); document.body.classList.toggle('pill-on', on); }
 async function startDaily(fresh){
-  await loadIndex(); const all = await loadExamAll(); const s = dailySession(); S.sess = s;
+  S.detour = false; await loadIndex(); const all = await loadExamAll(); const s = dailySession(); S.sess = s;
   if (!fresh) { const keys = loadDailyRound(); if (keys && keys.some(k => !s.checked[k]) && keys.every(k => all.some(x=>x.id===k))) { S.daily = keys; for (const k of keys) await loadCh(parseKey(k).ch); renderDaily(); return; } }
   const now = Date.now(); const ids = all.map(x=>x.id);
   const due = ids.filter(k => PROG[k] && PROG[k].due <= now && !s.checked[k]).sort((a,b)=>PROG[a].due-PROG[b].due);
@@ -778,7 +779,7 @@ async function relatedByul(e, d){
   return scored.slice(0, 14).map(x => x.b.k);
 }
 async function studyChoice(eid){
-  const r = resolve(eid); if (!r) return; const d = r.d, e = r.e; toast('관련 문항 찾는 중…'); const rel = await relatedByul(e, d);
+  const r = resolve(eid); if (!r) return; S.detour = true; const d = r.d, e = r.e; toast('관련 문항 찾는 중…'); const rel = await relatedByul(e, d);
   const chs = [...new Set(rel.map(k => parseKey(k).ch))];
   overlay(`<div class="b" style="font-size:16px;margin-bottom:4px">${pad(d.no)}강 ${esc(d.title)}</div><div class="small muted" style="margin-bottom:12px">지문·선지에 나온 내용과 관련된 별채우기 문항 ${rel.length}개를 찾았습니다${chs.length>1?` (${chs.map(c=>c+'강').join('·')})`:''}.</div>
     <div style="display:grid;gap:8px">
