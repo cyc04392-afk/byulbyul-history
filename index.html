@@ -346,6 +346,7 @@ async function loadGl(){ if (!S.gl) S.gl = await (await fetch('data/glossary.jso
 const $ = s => document.querySelector(s);
 const esc = s => String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pad = n => String(n).padStart(2,'0');
+const jsArr = a => '[' + a.map(x => "'"+String(x).replace(/'/g,'')+"'").join(',') + ']';
 const fmtDate = t => { const d = new Date(t); return `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())}`; };
 const fmtTime = t => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const dayKey = t => { const d = new Date(t); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
@@ -646,7 +647,7 @@ async function openResult(id){
   const wrongKeys = s.items.filter(i => !s.results[i]);
   $('#rs-body').innerHTML = `<div class="row" style="padding:12px 0 4px"><span class="pct">정답률 ${Math.round(100*s.correct/Math.max(1,s.total))}%</span><span class="small muted">첫 시도 기준 · ○ 정답 · ✕ 오답(정답 표시)</span></div>` +
     s.items.map(k => parseKey(k).exam ? examCard(resolve(k).e, resolve(k).d, s) : qCardResult(k, s)).join('') +
-    `<div style="display:flex;gap:8px;margin-top:16px">${wrongKeys.length && s.mode!=='exam' ? `<button class="pill-btn o" onclick="startSession({mode:'retry',keys:${JSON.stringify(wrongKeys)}})">오답 ${wrongKeys.length}문항 다시 풀기</button>`:''}<button class="pill-btn ghost" onclick="${s.ch?`openChapter(${s.ch})`:`go('home')`}">${s.ch?'단원으로':'홈으로'}</button></div>`;
+    `<div style="display:flex;gap:8px;margin-top:16px">${wrongKeys.length && s.mode!=='exam' ? `<button class="pill-btn o" onclick="startSession({mode:'retry',keys:${jsArr(wrongKeys)}})">오답 ${wrongKeys.length}문항 다시 풀기</button>`:''}<button class="pill-btn ghost" onclick="${s.ch?`openChapter(${s.ch})`:`go('home')`}">${s.ch?'단원으로':'홈으로'}</button></div>`;
   document.body.classList.remove('study-on'); go('result');
 }
 
@@ -684,7 +685,7 @@ function wrongHtml(){
   const byCh = {}; pool.forEach(x=>(byCh[x.ch] ||= []).push(x.key));
   const chs = Object.keys(byCh).map(Number).sort((a,b)=>a-b);
   if (!chs.length) return `<div class="empty">오답이 없습니다. 🎉</div>`;
-  return `<div style="padding-top:10px">${chs.map(ch=>{ const c=chInfo(ch); const seen=learnedCount(ch); const rate=Math.round(100*byCh[ch].length/Math.max(seen,1)); return `<div class="scard" onclick="startSession({mode:'retry',keys:${JSON.stringify(byCh[ch])}})">${thumb(ch,c.era)}<div class="t"><div class="n">${pad(ch)}강 ${esc(c.title)}</div><div class="m">${c.nq}문항 중 <span class="hl">${seen}</span>문항 학습</div><div class="row small" style="margin-top:3px"><span class="chip o">오답</span>${byCh[ch].length}문항</div></div><div style="text-align:right;flex:none"><div class="small muted">오답률</div><div class="b" style="color:var(--orange);font-size:16px">${rate}%</div></div></div>`; }).join('')}</div>
+  return `<div style="padding-top:10px">${chs.map(ch=>{ const c=chInfo(ch); const seen=learnedCount(ch); const rate=Math.round(100*byCh[ch].length/Math.max(seen,1)); return `<div class="scard" onclick="startSession({mode:'retry',keys:${jsArr(byCh[ch])}})">${thumb(ch,c.era)}<div class="t"><div class="n">${pad(ch)}강 ${esc(c.title)}</div><div class="m">${c.nq}문항 중 <span class="hl">${seen}</span>문항 학습</div><div class="row small" style="margin-top:3px"><span class="chip o">오답</span>${byCh[ch].length}문항</div></div><div style="text-align:right;flex:none"><div class="small muted">오답률</div><div class="b" style="color:var(--orange);font-size:16px">${rate}%</div></div></div>`; }).join('')}</div>
   <div style="margin-top:16px"><button class="pill-btn" onclick="retryAllWrong()">오답 전체 다시 풀기 (${pool.length})</button><div class="small muted" style="text-align:center;margin-top:6px">ⓘ 강별로 누르면 그 강의 오답만 다시 풉니다.</div></div>`;
 }
 function retryAllWrong(){ const pool = wrongPool(); if (!pool.length) return; startSession({mode:'retry', keys:pool.map(x=>x.key)}); }
@@ -776,7 +777,7 @@ async function openQList(no, only, fromExam){
   const stat = q => { const p = PROG[keyOf(no,q.n)]; if (!p) return '<span class="chip gray">미학습</span>'; if (p.due <= Date.now()) return '<span class="chip lo">복습 예정</span>'; return `<span class="chip lg">단계 ${p.lv}</span>`; };
   overlay(`<div class="row" style="justify-content:space-between;margin-bottom:6px"><div class="b" style="font-size:16px">${pad(no)}강 문항 목록 <span class="muted small">${list.length}${only?'/'+d.q.length:''}개</span></div>${only?`<button class="btn-sm" onclick="closeOv();openQList(${no})">전체 보기</button>`:''}</div>
     ${fromExam?`<div class="small muted" style="margin-bottom:8px">기출 문제와 관련된 문항만 모았습니다.</div>`:''}
-    <div class="row" style="margin-bottom:10px"><button class="pill-btn" style="flex:1" onclick="closeOv();startSession({mode:'pick',ch:${no},keys:${JSON.stringify(keys)}})">이 ${list.length}문항 풀기</button></div>
+    <div class="row" style="margin-bottom:10px"><button class="pill-btn" style="flex:1" onclick="closeOv();startSession({mode:'pick',ch:${no},keys:${jsArr(keys)}})">이 ${list.length}문항 풀기</button></div>
     <div class="qlist">${list.map(q => `<div class="qi"><div class="qi-h"><span class="qn-s">${q.n}</span>${stat(q)}<span class="sp"></span><button class="btn-sm" onclick="closeOv();startSession({mode:'pick',ch:${no},keys:['${keyOf(no,q.n)}']})">풀기</button><button class="btn-sm" onclick="const t=this.closest('.qi').querySelector('.qi-info');t.hidden=!t.hidden">정보</button></div>
       <div class="qi-t">${q.text.split(/(\{\{.+?\}\})/).map(p => { const m = p.match(/^\{\{(.+?)\}\}$/); return m ? `<b class="hl">${esc(m[1])}</b>` : highlight(p, d, q.kw, null); }).join('')}</div>
       <div class="qi-info" hidden>${qInfoHtml(keyOf(no,q.n), null)}</div></div>`).join('')}</div>`, 'sheet');
