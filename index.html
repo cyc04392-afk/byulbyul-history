@@ -221,6 +221,11 @@ body.study-on .nav{display:none}
 .ex .qtop{display:flex;align-items:center;gap:6px;margin-bottom:4px}
 .ex .qtop .sp{flex:1}
 .ex .qnum{font-weight:900;font-size:15px}
+.qlist .qi{padding:10px 0;border-bottom:1px solid var(--line)}
+.qlist .qi-h{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.qlist .qi-h .sp{flex:1}
+.qn-s{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--soft);font-size:11px;font-weight:700}
+.qlist .qi-t{font-size:14px;line-height:1.8;word-break:keep-all}
 .mimg{margin:8px 0 4px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;cursor:zoom-in}
 .mimg img{width:100%;display:block}
 .expl{background:var(--blue-s);border-radius:10px;padding:10px 12px;font-size:13px;margin:8px 0}
@@ -255,7 +260,7 @@ body.study-on .backdaily{bottom:calc(70px + env(safe-area-inset-bottom,0px))}
 
   <!-- CHAPTER -->
   <section class="screen" id="s-ch">
-    <div class="hdr"><button class="ic" onclick="goBack()">←</button><span class="b" id="ch-hdr-title"></span><span style="width:36px"></span></div>
+    <div class="hdr"><button class="ic" onclick="goBack()">←</button><span class="b" id="ch-hdr-title"></span><button class="btn-sm" id="ch-list-btn" onclick="openQList(S.cur)">☰ 목록</button></div>
     <div class="content" id="ch-body"></div>
   </section>
 
@@ -428,7 +433,7 @@ function sessRow(s){
   const on = s.status==='progress';
   return `<div class="it" onclick="${on?`resumeSession('${s.id}')`:`openResult('${s.id}')`}"><div class="tm">${fmtTime(s.start)}</div><div class="box ${on?'on':''}"><div class="n">${s.ch?pad(s.ch)+'. '+esc(chInfo(s.ch).title)+' · ':''}${modeName(s.mode)}</div>${on?`<div class="small">현재 채점 대기 중</div>`:`<div class="row small" style="margin-top:4px"><span class="chip b">정답</span>${s.correct}문항 <span class="chip o">오답</span>${s.wrong}문항</div>`}</div><div class="badge ${on?'prog':'done'}">${on?'채점중':'채점<br>완료'}</div></div>`;
 }
-const modeName = m => ({byul:'별채우기', study:'학습(새 문항+복습)', exam:'기출', retry:'오답 다시 풀기', review:'복습', daily:'오늘의 문제'})[m] || m;
+const modeName = m => ({byul:'별채우기', study:'학습(새 문항+복습)', exam:'기출', retry:'오답 다시 풀기', pick:'선택 문항', review:'복습', daily:'오늘의 문제'})[m] || m;
 
 /* ---------- SESSIONS (말해보카식 간격 반복) ---------- */
 const LV = [10*60e3, 864e5, 3*864e5, 7*864e5, 14*864e5, 30*864e5, 60*864e5, 120*864e5];
@@ -447,7 +452,7 @@ async function startSession(opts){
   const o = typeof opts === 'number' ? {ch:opts, mode:'study'} : opts; const mode = o.mode || 'study';
   let keys = [], ch = o.ch || null;
   if (mode === 'exam') { const d = await loadCh(ch); keys = d.exam.map(e => e.id); }
-  else if (mode === 'retry') { keys = o.keys; }
+  else if (mode === 'retry' || mode === 'pick') { keys = o.keys; }
   else if (mode === 'review') { keys = dueKeys(null).slice(0, 20); if (!keys.length) { toast('지금 복습할 문항이 없습니다. 학습을 먼저 해 보세요.'); return; } ch = parseKey(keys[0]).ch; }
   else {
     const chs = ch ? [ch] : S.index.chapters.map(c=>c.no); for (const c of chs) await loadCh(c);
@@ -576,7 +581,7 @@ function examCard(e, d, s, num){
     <div class="stem">${highlight(e.stem, d, e.kw, null, L)}</div>${mat}${imgs.length?`<div class="gal">${imgs.map((im,i)=>figure(im,e.img[i],d.no)).join('')}</div>`:''}
     ${checked?`<div class="expl"><h5>자료 해설</h5>${esc(e.expl)}</div>`:''}
     <div>${e.options.map((o,i)=>{ const n=i+1; let cls=''; if (checked){ if (n===e.answer) cls='right'; else if (n===sel) cls='wrong'; } else if (n===sel) cls='sel'; return `<div class="opt ${cls}" onclick="${checked?'':`pick('${e.id}',${n})`}"><span class="c">${'①②③④⑤'[i]}</span><span>${highlight(o, d, e.kw, null, L)}</span></div>${checked&&e.optx&&e.optx[i]?`<div class="optx ${n===e.answer?'right':''}">${esc(e.optx[i])}</div>`:''}`; }).join('')}</div>
-    <div class="acts">${checked?`<span class="chip ${s.results[e.id]?'lb':'lo'}">${s.results[e.id]?'정답':'오답'}</span>`:`<button class="btn-sm on" onclick="checkEx('${e.id}')">확인</button>`}<span class="sp"></span><button class="btn-sm" onclick="openChapter(${d.no})">학습하기 · ${pad(d.no)}강</button><button class="btn-sm" onclick="toggleInfo('${e.id}')">정보 ${checked?'':'🔒'}</button></div>
+    <div class="acts">${checked?`<span class="chip ${s.results[e.id]?'lb':'lo'}">${s.results[e.id]?'정답':'오답'}</span>`:`<button class="btn-sm on" onclick="checkEx('${e.id}')">확인</button>`}<span class="sp"></span><button class="btn-sm" onclick="studyChoice('${e.id}')">학습하기 · ${pad(d.no)}강</button><button class="btn-sm" onclick="toggleInfo('${e.id}')">정보 ${checked?'':'🔒'}</button></div>
     <div id="info-${e.id}" hidden>${checked?exInfoHtml(e, d):`<div class="info"><div class="muted">문제를 풀면 해설·관련 정보가 열립니다.</div></div>`}</div></div>`;
 }
 function exInfoHtml(e, d){
@@ -748,6 +753,34 @@ function renderMore(){
     <div class="sect">사용법</div><div class="card small" style="line-height:1.8">· 문항이 한 번에 하나씩 나옵니다. 빈칸을 입력하고 <b>제출</b>(Enter)하면 즉시 채점되고, 틀린 문항은 같은 학습에서 잠시 후 다시 나옵니다. 학습이 끝나면 채점 리스트에 기록됩니다.<br>· <b>학습 시작</b>은 복습 예정 문항을 먼저, 새 문항을 사이사이에 섞어 냅니다(복습 2 : 새 문항 1).<br>· 지문의 <span class="kw">초록 밑줄 키워드</span>를 누르면 정의·배경·의의·파생 효과 말풍선이 뜹니다.<br>· <b>정보</b> 버튼: 요약·관련 정보·사진·지도·GIF. 정답이 드러나는 부분은 확인 전까지 ○○로 가려집니다.<br>· 오답은 오답노트에 모이고, 다시 풀어 맞히면 오답개선율에 반영됩니다.</div>`;
 }
 
+/* ---------- 문항 목록 / 관련 문항 ---------- */
+function fullText(q){ return q.text.replace(/\{\{(.+?)\}\}/g, '$1'); }
+function relatedByul(e, d){
+  const names = []; e.kw.forEach(k => { names.push(k); for (const a in d.alias) if (d.alias[a]===k) names.push(a); const t = d.alias[k]||k; if (t!==k) names.push(t); });
+  const terms = [...new Set(names)].filter(n => n.length >= 2);
+  const etext = [e.stem, e.material||'', ...(e.options||[])].join(' ');
+  return d.q.map(q => { const ft = fullText(q); let sc = 0; terms.forEach(t => { if (ft.includes(t)) sc += 2; }); (q.kw||[]).forEach(k => { if (k.length>=2 && etext.includes(k)) sc += 1; }); return {q, sc}; })
+    .filter(x => x.sc > 0).sort((a,b) => b.sc - a.sc).slice(0, 8).map(x => x.q);
+}
+function studyChoice(eid){
+  const r = resolve(eid); if (!r) return; const d = r.d, e = r.e; const rel = relatedByul(e, d);
+  overlay(`<div class="b" style="font-size:16px;margin-bottom:4px">${pad(d.no)}강 ${esc(d.title)}</div><div class="small muted" style="margin-bottom:12px">이 기출과 관련된 별채우기 문항 ${rel.length}개를 찾았습니다.</div>
+    <div style="display:grid;gap:8px">
+      <button class="pill-btn" ${rel.length?'':'disabled style="opacity:.5"'} onclick="closeOv();openChapter(${d.no}).then(()=>openQList(${d.no}, ${JSON.stringify(rel.map(q=>q.n))}, '${eid}'))">관련 문항만 보기 (${rel.length})</button>
+      <button class="pill-btn ghost" onclick="closeOv();openChapter(${d.no})">${pad(d.no)}강 전체 학습</button>
+    </div>`, 'sheet');
+}
+async function openQList(no, only, fromExam){
+  const d = await loadCh(no); const list = only ? d.q.filter(q => only.includes(q.n)) : d.q;
+  const keys = list.map(q => keyOf(no, q.n));
+  const stat = q => { const p = PROG[keyOf(no,q.n)]; if (!p) return '<span class="chip gray">미학습</span>'; if (p.due <= Date.now()) return '<span class="chip lo">복습 예정</span>'; return `<span class="chip lg">단계 ${p.lv}</span>`; };
+  overlay(`<div class="row" style="justify-content:space-between;margin-bottom:6px"><div class="b" style="font-size:16px">${pad(no)}강 문항 목록 <span class="muted small">${list.length}${only?'/'+d.q.length:''}개</span></div>${only?`<button class="btn-sm" onclick="closeOv();openQList(${no})">전체 보기</button>`:''}</div>
+    ${fromExam?`<div class="small muted" style="margin-bottom:8px">기출 문제와 관련된 문항만 모았습니다.</div>`:''}
+    <div class="row" style="margin-bottom:10px"><button class="pill-btn" style="flex:1" onclick="closeOv();startSession({mode:'pick',ch:${no},keys:${JSON.stringify(keys)}})">이 ${list.length}문항 풀기</button></div>
+    <div class="qlist">${list.map(q => `<div class="qi"><div class="qi-h"><span class="qn-s">${q.n}</span>${stat(q)}<span class="sp"></span><button class="btn-sm" onclick="closeOv();startSession({mode:'pick',ch:${no},keys:['${keyOf(no,q.n)}']})">풀기</button><button class="btn-sm" onclick="const t=this.closest('.qi').querySelector('.qi-info');t.hidden=!t.hidden">정보</button></div>
+      <div class="qi-t">${q.text.split(/(\{\{.+?\}\})/).map(p => { const m = p.match(/^\{\{(.+?)\}\}$/); return m ? `<b class="hl">${esc(m[1])}</b>` : highlight(p, d, q.kw, null); }).join('')}</div>
+      <div class="qi-info" hidden>${qInfoHtml(keyOf(no,q.n), null)}</div></div>`).join('')}</div>`, 'sheet');
+}
 /* ---------- DICTIONARY / SUMMARY / NOTES ---------- */
 async function openDict(no){
   let terms, alias, src;
